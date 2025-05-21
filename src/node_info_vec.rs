@@ -63,11 +63,11 @@ mod tests {
 
     #[test]
     fn test_node_info() {
-        let wm = NodeInfoVec::new(&[0, 1, 2, 3], 4);
-        assert_eq!(wm.node_info_id(0), Some(NodeInfoId::new(0)));
-        assert_eq!(wm.node_info_id(1), Some(NodeInfoId::new(1)));
-        assert_eq!(wm.node_info_id(2), Some(NodeInfoId::new(2)));
-        assert_eq!(wm.node_info_id(10), None);
+        let v = NodeInfoVec::new(&[0, 1, 2, 3], 4);
+        assert_eq!(v.node_info_id(0), Some(NodeInfoId::new(0)));
+        assert_eq!(v.node_info_id(1), Some(NodeInfoId::new(1)));
+        assert_eq!(v.node_info_id(2), Some(NodeInfoId::new(2)));
+        assert_eq!(v.node_info_id(10), None);
     }
 
     #[test]
