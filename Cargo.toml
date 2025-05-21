@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 ahash = "0.8.12"
+struson = "0.6.0"
 vers-vecs = "1.6.3"
