@@ -102,6 +102,10 @@ impl NodeLookup {
             .get(node_info_id.id() as usize)
             .expect("Node info id does not exist in this document")
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.node_infos.len()
+    }
 }
 
 #[cfg(test)]

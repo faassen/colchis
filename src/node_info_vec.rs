@@ -26,6 +26,19 @@ impl NodeInfoVec {
         }
     }
 
+    pub(crate) fn node_info_id(&self, i: usize) -> Option<NodeInfoId> {
+        // we want to avoid having to store an array of node info ids and the information is already in the sparse rs vecs
+        // but is this fast enough?
+        for (id, sparse_rs_vec) in self.sparse_rs_vecs.iter().enumerate() {
+            if let Some(b) = sparse_rs_vec.is_set(i as u64) {
+                if b {
+                    return Some(NodeInfoId::new(id as u64));
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn rank_node_info_id(&self, i: usize, node_info_id: NodeInfoId) -> Option<usize> {
         if i <= self.len {
             Some(self.sparse_rs_vecs[node_info_id.id() as usize].rank1(i as u64) as usize)
@@ -47,6 +60,15 @@ impl NodeInfoVec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_node_info() {
+        let wm = NodeInfoVec::new(&[0, 1, 2, 3], 4);
+        assert_eq!(wm.node_info_id(0), Some(NodeInfoId::new(0)));
+        assert_eq!(wm.node_info_id(1), Some(NodeInfoId::new(1)));
+        assert_eq!(wm.node_info_id(2), Some(NodeInfoId::new(2)));
+        assert_eq!(wm.node_info_id(10), None);
+    }
 
     #[test]
     fn test_rank() {

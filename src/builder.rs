@@ -1,7 +1,7 @@
 use vers_vecs::BitVec;
 
 use crate::{
-    info::{NodeInfo, NodeInfoId, NodeType},
+    info::{NodeInfo, NodeType},
     lookup::NodeLookup,
 };
 
@@ -9,7 +9,7 @@ pub(crate) struct Builder {
     pub(crate) node_lookup: NodeLookup,
     pub(crate) parentheses: BitVec,
     pub(crate) text_opening_parens: BitVec,
-    pub(crate) usage: Vec<NodeInfoId>,
+    pub(crate) usage: Vec<u64>,
 }
 
 impl Builder {
@@ -35,7 +35,7 @@ impl Builder {
         }
         let node_info = NodeInfo::open(node_type);
         let node_info_id = self.node_lookup.register(node_info);
-        self.usage.push(node_info_id);
+        self.usage.push(node_info_id.id());
     }
 
     pub(crate) fn close(&mut self, node_type: NodeType) {
@@ -43,7 +43,7 @@ impl Builder {
         self.text_opening_parens.append(false);
         let node_info = NodeInfo::close(node_type);
         let node_info_id = self.node_lookup.register(node_info);
-        self.usage.push(node_info_id);
+        self.usage.push(node_info_id.id());
     }
 }
 
