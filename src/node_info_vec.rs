@@ -26,6 +26,7 @@ impl NodeInfoVec {
         }
     }
 
+    // NOTE: we'd like to minimize the use of this operation in loops
     pub(crate) fn node_info_id(&self, i: usize) -> Option<NodeInfoId> {
         // we want to avoid having to store an array of node info ids and the information is already in the sparse rs vecs
         // but is this fast enough?
