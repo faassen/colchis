@@ -5,14 +5,14 @@ use crate::{
     lookup::NodeLookup,
 };
 
-pub(crate) struct Builder {
+pub(crate) struct TreeBuilder {
     pub(crate) node_lookup: NodeLookup,
     pub(crate) parentheses: BitVec,
     pub(crate) text_opening_parens: BitVec,
     pub(crate) usage: Vec<u64>,
 }
 
-impl Builder {
+impl TreeBuilder {
     pub(crate) fn new() -> Self {
         Self {
             node_lookup: NodeLookup::new(),
@@ -46,6 +46,3 @@ impl Builder {
         self.usage.push(node_info_id.id());
     }
 }
-
-#[cfg(test)]
-mod tests {}

@@ -1,10 +1,10 @@
 use vers_vecs::{BpTree, RsVec};
 
 use crate::{
-    builder::Builder,
     info::{NodeInfo, NodeInfoId},
     lookup::NodeLookup,
     node_info_vec::NodeInfoVec,
+    tree_builder::TreeBuilder,
 };
 
 pub(crate) struct Structure {
@@ -15,7 +15,7 @@ pub(crate) struct Structure {
 }
 
 impl Structure {
-    pub(crate) fn new(builder: Builder) -> Self {
+    pub(crate) fn new(builder: TreeBuilder) -> Self {
         let amount = builder.node_lookup.len();
         let node_lookup = builder.node_lookup;
         let text_opening_parens = RsVec::from_bit_vec(builder.text_opening_parens);
@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_structure() {
-        let mut builder = Builder::new();
+        let mut builder = TreeBuilder::new();
 
         // ["a", "b", "c"]
         builder.open(NodeType::Array);

@@ -15,7 +15,7 @@ impl TextBuilder {
         }
     }
 
-    pub(crate) fn text_node(&mut self, text: &str) {
+    pub(crate) fn string_node(&mut self, text: &str) {
         self.s.push_str(text);
         // terminator $, the 0 byte
         let position = self.s.len() as u64;
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn test_one_text_beginning() {
         let mut builder = TextBuilder::new();
-        builder.text_node("hello");
+        builder.string_node("hello");
         let usage = builder.build();
         let text_id = usage.text_id(0);
         assert_eq!(usage.text_index(text_id), 0);
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn test_one_text_middle() {
         let mut builder = TextBuilder::new();
-        builder.text_node("hello");
+        builder.string_node("hello");
         let usage = builder.build();
         let text_id = usage.text_id(3);
         assert_eq!(usage.text_index(text_id), 0);
@@ -110,9 +110,9 @@ mod tests {
     fn test_two_texts() {
         let mut builder = TextBuilder::new();
         // 0..5
-        builder.text_node("hello");
+        builder.string_node("hello");
         // 6..11
-        builder.text_node("world");
+        builder.string_node("world");
         let usage = builder.build();
 
         // in 'hello' text
@@ -132,9 +132,9 @@ mod tests {
     fn test_two_texts_range() {
         let mut builder = TextBuilder::new();
         // 0..5
-        builder.text_node("hello");
+        builder.string_node("hello");
         // 6..11
-        builder.text_node("world");
+        builder.string_node("world");
         let usage = builder.build();
 
         assert_eq!(usage.text_range(TextId(0)), 0..5);
@@ -144,8 +144,8 @@ mod tests {
     #[test]
     fn test_two_texts_value() {
         let mut builder = TextBuilder::new();
-        builder.text_node("hello");
-        builder.text_node("world");
+        builder.string_node("hello");
+        builder.string_node("world");
         let usage = builder.build();
 
         assert_eq!(usage.text_value(TextId(0)), "hello");
