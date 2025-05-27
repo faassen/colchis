@@ -43,6 +43,13 @@ impl Document {
         }
     }
 
+    pub fn heap_size(&self) -> usize {
+        self.structure.heap_size()
+            + self.text_usage.heap_size()
+            + self.numbers.len() * std::mem::size_of::<f64>()
+            + self.booleans.heap_size()
+    }
+
     pub fn parse(json: &[u8]) -> Result<Document, JsonParseError> {
         let parser = Parser::new(json);
         parser.parse()

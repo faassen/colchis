@@ -30,6 +30,10 @@ impl Structure {
         }
     }
 
+    pub(crate) fn heap_size(&self) -> usize {
+        self.tree.heap_size() + self.node_lookup.heap_size() + self.node_info_vec.heap_size()
+    }
+
     pub(crate) fn lookup_node_info(&self, node_info_id: NodeInfoId) -> &NodeInfo {
         self.node_lookup.by_node_info_id(node_info_id)
     }

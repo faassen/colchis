@@ -27,6 +27,10 @@ impl NodeInfoVec {
         }
     }
 
+    pub(crate) fn heap_size(&self) -> usize {
+        self.sparse_rs_vecs.iter().map(|v| v.heap_size()).sum()
+    }
+
     // We'd like to minimize the use of this operation in loops
     // but we can't, as node_type depends on it and it's going to be used
     // throughout in the tree API.

@@ -59,6 +59,12 @@ impl NodeLookup {
         node_lookup
     }
 
+    pub(crate) fn heap_size(&self) -> usize {
+        self.node_infos.len() * std::mem::size_of::<NodeInfo>()
+        // approximation for the size of the hashmap only using values
+            + self.node_info_lookup.len() * std::mem::size_of::<(NodeInfo, NodeInfoId)>()
+    }
+
     pub fn register(&mut self, node_info: NodeInfo) -> NodeInfoId {
         if let Some(idx) = self.register_fast_path(&node_info) {
             return idx;
