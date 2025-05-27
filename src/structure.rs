@@ -16,7 +16,7 @@ pub(crate) struct Structure {
 
 impl Structure {
     pub(crate) fn new(tree_builder: TreeBuilder) -> Self {
-        let amount = tree_builder.node_lookup.len();
+        let amount = tree_builder.parentheses.len();
         let node_lookup = tree_builder.node_lookup;
         let tree = BpTree::from_bit_vector(tree_builder.parentheses);
         let node_info_vec = NodeInfoVec::new(tree_builder.usage, amount);
@@ -44,7 +44,7 @@ impl Structure {
     pub(crate) fn node_info_id(&self, i: usize) -> NodeInfoId {
         self.node_info_vec
             .node_info_id(i)
-            .expect("Node information to exist")
+            .expect("Node information does not exist")
     }
 
     pub(crate) fn tree(&self) -> &BpTree {
