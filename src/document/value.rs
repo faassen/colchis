@@ -1,6 +1,6 @@
 use crate::{info::NodeType, text_usage::TextId};
 
-use super::{Document, Node, array::ArrayValue};
+use super::{Document, Node, ObjectValue, array::ArrayValue};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'a> {
@@ -10,20 +10,6 @@ pub enum Value<'a> {
     Number(f64),
     Boolean(bool),
     Null,
-}
-
-#[derive(Debug, Clone)]
-pub struct ObjectValue<'a> {
-    document: &'a Document,
-    node: Node,
-}
-
-impl PartialEq for ObjectValue<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        // document reference equality
-        self.node == other.node
-            && self.document as *const Document == other.document as *const Document
-    }
 }
 
 impl Document {
@@ -75,10 +61,7 @@ impl Document {
     }
 
     fn object_value(&self, node: Node) -> ObjectValue<'_> {
-        ObjectValue {
-            document: self,
-            node,
-        }
+        ObjectValue::new(self, node)
     }
 }
 
