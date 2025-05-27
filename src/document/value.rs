@@ -54,9 +54,7 @@ impl Document {
             }
             NodeType::Number => Value::Number(self.number_value(node)),
             NodeType::Boolean => Value::Boolean(self.boolean_value(node)),
-            NodeType::Null => {
-                todo!()
-            }
+            NodeType::Null => Value::Null,
             NodeType::Field(s) => {
                 todo!()
             }
@@ -101,5 +99,12 @@ mod tests {
         let doc = Document::parse("false".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_null_value() {
+        let doc = Document::parse("null".as_bytes()).unwrap();
+        let v = doc.root_value();
+        assert_eq!(v, Value::Null);
     }
 }
