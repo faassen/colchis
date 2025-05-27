@@ -72,6 +72,14 @@ impl NodeInfoVec {
         if self.len != s { Some(s) } else { None }
     }
 
+    pub(crate) fn text_id(&self, i: usize) -> Option<usize> {
+        if i <= self.len {
+            Some(self.sparse_rs_vecs[info::STRING_OPEN_ID.index()].rank1(i as u64) as usize)
+        } else {
+            None
+        }
+    }
+
     // in sparse bit vec for opening number, we can do a rank check to determine
     // the number id
     pub(crate) fn number_id(&self, i: usize) -> Option<usize> {

@@ -12,7 +12,6 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct Structure {
     node_lookup: NodeLookup,
-    // text_opening_parens: RsVec,
     tree: BpTree,
     node_info_vec: NodeInfoVec,
 }
@@ -21,13 +20,11 @@ impl Structure {
     pub(crate) fn new(tree_builder: TreeBuilder) -> Self {
         let amount = tree_builder.node_lookup.len();
         let node_lookup = tree_builder.node_lookup;
-        // let text_opening_parens = RsVec::from_bit_vec(builder.text_opening_parens);
         let tree = BpTree::from_bit_vector(tree_builder.parentheses);
         let node_info_vec = NodeInfoVec::new(&tree_builder.usage, amount);
 
         Self {
             node_lookup,
-            // text_opening_parens,
             tree,
             node_info_vec,
         }
@@ -50,6 +47,10 @@ impl Structure {
 
     pub(crate) fn tree(&self) -> &BpTree {
         &self.tree
+    }
+
+    pub(crate) fn text_id(&self, i: usize) -> Option<usize> {
+        self.node_info_vec.text_id(i)
     }
 
     pub(crate) fn number_id(&self, i: usize) -> Option<usize> {

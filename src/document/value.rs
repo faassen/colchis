@@ -1,4 +1,4 @@
-use crate::info::NodeType;
+use crate::{info::NodeType, text_usage::TextId};
 
 use super::{Document, Node};
 
@@ -6,7 +6,7 @@ use super::{Document, Node};
 pub enum Value<'a> {
     Object(ObjectValue<'a>),
     Array(ArrayValue<'a>),
-    Text(&'a str),
+    String(&'a str),
     Number(f64),
     Boolean(bool),
     Null,
@@ -50,7 +50,8 @@ impl Document {
                 todo!()
             }
             NodeType::String => {
-                todo!()
+                let s = self.string_value(node);
+                Value::String(s)
             }
             NodeType::Number => Value::Number(self.number_value(node)),
             NodeType::Boolean => Value::Boolean(self.boolean_value(node)),
@@ -63,6 +64,12 @@ impl Document {
     pub fn root_value(&self) -> Value<'_> {
         let root = self.root();
         self.value(root)
+    }
+
+    fn string_value(&self, node: Node) -> &str {
+        let text_id = self.structure.text_id(node.get()).unwrap();
+        let text_id = TextId::new(text_id);
+        self.text_usage.text_value(text_id)
     }
 
     fn number_value(&self, node: Node) -> f64 {
@@ -106,5 +113,12 @@ mod tests {
         let doc = Document::parse("null".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Null);
+    }
+
+    #[test]
+    fn test_string_value() {
+        let doc = Document::parse(r#""hello""#.as_bytes()).unwrap();
+        let v = doc.root_value();
+        assert_eq!(v, Value::String("hello"));
     }
 }
