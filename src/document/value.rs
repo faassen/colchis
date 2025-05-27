@@ -8,7 +8,7 @@ pub enum Value<'a> {
     Array(ArrayValue<'a>),
     Text(&'a str),
     Number(f64),
-    Bool(bool),
+    Boolean(bool),
     Null,
 }
 
@@ -53,9 +53,7 @@ impl Document {
                 todo!()
             }
             NodeType::Number => Value::Number(self.number_value(node)),
-            NodeType::Boolean => {
-                todo!()
-            }
+            NodeType::Boolean => Value::Boolean(self.boolean_value(node)),
             NodeType::Null => {
                 todo!()
             }
@@ -73,6 +71,11 @@ impl Document {
         let number_id = self.structure.number_id(node.get()).unwrap();
         self.numbers[number_id]
     }
+
+    fn boolean_value(&self, node: Node) -> bool {
+        let boolean_id = self.structure.boolean_id(node.get()).unwrap();
+        self.booleans.is_bit_set_unchecked(boolean_id)
+    }
 }
 
 #[cfg(test)]
@@ -84,5 +87,19 @@ mod tests {
         let doc = Document::parse("42".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Number(42f64));
+    }
+
+    #[test]
+    fn test_boolean_value_true() {
+        let doc = Document::parse("true".as_bytes()).unwrap();
+        let v = doc.root_value();
+        assert_eq!(v, Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_boolean_value_false() {
+        let doc = Document::parse("false".as_bytes()).unwrap();
+        let v = doc.root_value();
+        assert_eq!(v, Value::Boolean(false));
     }
 }

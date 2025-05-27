@@ -81,6 +81,14 @@ impl NodeInfoVec {
             None
         }
     }
+
+    pub(crate) fn boolean_id(&self, i: usize) -> Option<usize> {
+        if i <= self.len {
+            Some(self.sparse_rs_vecs[info::BOOLEAN_OPEN_ID.index()].rank1(i as u64) as usize)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

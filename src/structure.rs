@@ -55,6 +55,10 @@ impl Structure {
     pub(crate) fn number_id(&self, i: usize) -> Option<usize> {
         self.node_info_vec.number_id(i)
     }
+
+    pub(crate) fn boolean_id(&self, i: usize) -> Option<usize> {
+        self.node_info_vec.boolean_id(i)
+    }
 }
 
 #[cfg(test)]
