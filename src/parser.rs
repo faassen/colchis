@@ -1,6 +1,7 @@
-use std::io::Read;
+use std::{io::Read, num::ParseFloatError};
 
 use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ValueType};
+use vers_vecs::BitVec;
 
 use crate::{
     document::Document, info::NodeType, text_usage::TextBuilder, tree_builder::TreeBuilder,
@@ -10,6 +11,25 @@ struct Parser<R: Read> {
     reader: JsonStreamReader<R>,
     tree_builder: TreeBuilder,
     text_builder: TextBuilder,
+    numbers: Vec<f64>,
+    booleans: BitVec,
+}
+
+enum ParseError {
+    Reader(ReaderError),
+    NumberParseError(ParseFloatError),
+}
+
+impl From<ReaderError> for ParseError {
+    fn from(err: ReaderError) -> Self {
+        ParseError::Reader(err)
+    }
+}
+
+impl From<ParseFloatError> for ParseError {
+    fn from(err: ParseFloatError) -> Self {
+        ParseError::NumberParseError(err)
+    }
 }
 
 impl<R: Read> Parser<R> {
@@ -18,16 +38,18 @@ impl<R: Read> Parser<R> {
             reader: JsonStreamReader::new(json),
             tree_builder: TreeBuilder::new(),
             text_builder: TextBuilder::new(),
+            numbers: Vec::new(),
+            booleans: BitVec::new(),
         }
     }
-    fn parse(&mut self) -> Result<Document, ReaderError> {
+    fn parse(&mut self) -> Result<Document, ParseError> {
         while self.reader.has_next()? {
             self.parse_item()?;
         }
         todo!()
     }
 
-    fn parse_item(&mut self) -> Result<(), ReaderError> {
+    fn parse_item(&mut self) -> Result<(), ParseError> {
         match self.reader.peek()? {
             ValueType::Array => {
                 self.reader.begin_array()?;
@@ -58,9 +80,23 @@ impl<R: Read> Parser<R> {
                 self.text_builder.string_node(str);
                 self.tree_builder.close(NodeType::String);
             }
-            ValueType::Number => {}
-            ValueType::Boolean => {}
-            ValueType::Null => {}
+            ValueType::Number => {
+                let number = self.reader.next_number()??;
+                self.tree_builder.open(NodeType::Number);
+                self.numbers.push(number);
+                self.tree_builder.close(NodeType::Number);
+            }
+            ValueType::Boolean => {
+                let boolean = self.reader.next_bool()?;
+                self.tree_builder.open(NodeType::Boolean);
+                self.booleans.append(boolean);
+                self.tree_builder.close(NodeType::Boolean);
+            }
+            ValueType::Null => {
+                self.reader.next_null()?;
+                self.tree_builder.open(NodeType::Null);
+                self.tree_builder.close(NodeType::Null);
+            }
         }
         Ok(())
     }

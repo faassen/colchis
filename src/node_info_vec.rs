@@ -26,7 +26,21 @@ impl NodeInfoVec {
         }
     }
 
-    // NOTE: we'd like to minimize the use of this operation in loops
+    // We'd like to minimize the use of this operation in loops
+    // but we can't, as node_type depends on it and it's going to be used
+    // throughout in the tree API.
+    //
+    // Maybe this is fast enough if there aren't a lot of keys, after all
+    // each individual is_set check is basically constant time.
+    //
+    // The simplest would be to store a vector of
+    // the node ids, but this means an extra integer (possibly a short one) per
+    // node. is there something smarter we could do?
+    // Unrolled checking of the bitvecs which have a constant might help
+    // a bit but doesn't avoid the internal work that spare_rs_vec does.
+    //
+    // We could store some bits per node id to cut the search time down to
+    // only a section of this
     pub(crate) fn node_info_id(&self, i: usize) -> Option<NodeInfoId> {
         // we want to avoid having to store an array of node info ids and the information is already in the sparse rs vecs
         // but is this fast enough?
