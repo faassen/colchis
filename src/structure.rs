@@ -19,7 +19,7 @@ impl Structure {
         let amount = tree_builder.node_lookup.len();
         let node_lookup = tree_builder.node_lookup;
         let tree = BpTree::from_bit_vector(tree_builder.parentheses);
-        let node_info_vec = NodeInfoVec::new(&tree_builder.usage, amount);
+        let node_info_vec = NodeInfoVec::new(tree_builder.usage, amount);
 
         Self {
             node_lookup,

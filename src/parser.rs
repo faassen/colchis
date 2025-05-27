@@ -87,11 +87,11 @@ impl<R: Read> Parser<R> {
     }
 
     fn parse_item(&mut self) -> Result<(), JsonParseError> {
-        // TICK_COUNTER.fetch_add(1, Ordering::Relaxed);
-        // if TICK_COUNTER.load(Ordering::Relaxed) % 1000000 == 0 {
-        //     self.builder.tree_builder.display_heap_sizes();
-        //     // self.builder.display_heap_sizes();
-        // }
+        TICK_COUNTER.fetch_add(1, Ordering::Relaxed);
+        if TICK_COUNTER.load(Ordering::Relaxed) % 1000000 == 0 {
+            self.builder.tree_builder.display_heap_sizes();
+            // self.builder.display_heap_sizes();
+        }
         match self.reader.peek()? {
             ValueType::Array => {
                 self.reader.begin_array()?;
