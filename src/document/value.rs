@@ -62,7 +62,8 @@ impl Document {
     pub fn value(&self, node: Node) -> Value<'_> {
         match self.node_type(node) {
             NodeType::Object => {
-                todo!()
+                let object_value = self.object_value(node);
+                Value::Object(object_value)
             }
             NodeType::Array => {
                 let array_value = self.array_value(node);
@@ -213,4 +214,17 @@ mod tests {
             panic!("Expected an array value");
         }
     }
+
+    // #[test]
+    // fn test_object() {
+    //     let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+    //     let v = doc.root_value();
+
+    //     if let Value::Object(object_value) = v {
+    //         assert_eq!(object_value.get("key1"), Some(Value::String("value1")));
+    //         assert_eq!(object_value.get("key2"), Some(Value::Number(42.0)));
+    //     } else {
+    //         panic!("Expected an object value");
+    //     }
+    // }
 }
