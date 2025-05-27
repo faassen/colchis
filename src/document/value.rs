@@ -157,4 +157,47 @@ mod tests {
             panic!("Expected an object value");
         }
     }
+
+    #[test]
+    fn test_object_keys() {
+        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let v = doc.root_value();
+
+        if let Value::Object(object_value) = v {
+            let keys: Vec<_> = object_value.keys().collect();
+            assert_eq!(keys, vec!["key1", "key2"]);
+        } else {
+            panic!("Expected an object value");
+        }
+    }
+
+    #[test]
+    fn test_object_values() {
+        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let v = doc.root_value();
+
+        if let Value::Object(object_value) = v {
+            let values: Vec<_> = object_value.values().collect();
+            assert_eq!(values, vec![Value::String("value1"), Value::Number(42.0)]);
+        } else {
+            panic!("Expected an object value");
+        }
+    }
+
+    #[test]
+    fn test_object_entries() {
+        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let v = doc.root_value();
+
+        if let Value::Object(object_value) = v {
+            let entries: Vec<_> = object_value.iter().collect();
+            assert_eq!(entries.len(), 2);
+            assert_eq!(entries[0].0, "key1");
+            assert_eq!(entries[0].1, Value::String("value1"));
+            assert_eq!(entries[1].0, "key2");
+            assert_eq!(entries[1].1, Value::Number(42.0));
+        } else {
+            panic!("Expected an object value");
+        }
+    }
 }
