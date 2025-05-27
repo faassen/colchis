@@ -7,7 +7,7 @@ use crate::{
     document::Document, info::NodeType, text_usage::TextBuilder, tree_builder::TreeBuilder,
 };
 
-struct Parser<R: Read> {
+pub(crate) struct Parser<R: Read> {
     reader: JsonStreamReader<R>,
     builder: Builder,
 }
@@ -30,35 +30,34 @@ impl Builder {
     }
 }
 
-enum ParseError {
+#[derive(Debug)]
+pub enum JsonParseError {
     Reader(ReaderError),
     NumberParseError(ParseFloatError),
 }
 
-impl From<ReaderError> for ParseError {
+impl From<ReaderError> for JsonParseError {
     fn from(err: ReaderError) -> Self {
-        ParseError::Reader(err)
+        JsonParseError::Reader(err)
     }
 }
 
-impl From<ParseFloatError> for ParseError {
+impl From<ParseFloatError> for JsonParseError {
     fn from(err: ParseFloatError) -> Self {
-        ParseError::NumberParseError(err)
+        JsonParseError::NumberParseError(err)
     }
 }
 
 impl<R: Read> Parser<R> {
-    fn new(json: R) -> Self {
+    pub(crate) fn new(json: R) -> Self {
         Self {
             reader: JsonStreamReader::new(json),
             builder: Builder::new(),
         }
     }
 
-    fn parse(mut self) -> Result<Document, ParseError> {
-        while self.reader.has_next()? {
-            self.parse_item()?;
-        }
+    pub(crate) fn parse(mut self) -> Result<Document, JsonParseError> {
+        self.parse_item()?;
         let structure = self.builder.tree_builder.build();
         let text_usage = self.builder.text_builder.build();
         Ok(Document::new(
@@ -69,7 +68,7 @@ impl<R: Read> Parser<R> {
         ))
     }
 
-    fn parse_item(&mut self) -> Result<(), ParseError> {
+    fn parse_item(&mut self) -> Result<(), JsonParseError> {
         match self.reader.peek()? {
             ValueType::Array => {
                 self.reader.begin_array()?;
@@ -119,5 +118,18 @@ impl<R: Read> Parser<R> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_struson_single_number() {
+        let json = "42";
+        let mut reader = JsonStreamReader::new(json.as_bytes());
+        let nr: f64 = reader.next_number().unwrap().unwrap();
+        assert_eq!(nr, 42f64);
     }
 }

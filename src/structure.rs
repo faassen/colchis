@@ -9,6 +9,7 @@ use crate::{
     tree_builder::TreeBuilder,
 };
 
+#[derive(Debug)]
 pub(crate) struct Structure {
     node_lookup: NodeLookup,
     // text_opening_parens: RsVec,
@@ -45,6 +46,14 @@ impl Structure {
         self.node_info_vec
             .node_info_id(i)
             .expect("Node information to exist")
+    }
+
+    pub(crate) fn tree(&self) -> &BpTree {
+        &self.tree
+    }
+
+    pub(crate) fn number_id(&self, i: usize) -> Option<usize> {
+        self.node_info_vec.number_id(i)
     }
 }
 

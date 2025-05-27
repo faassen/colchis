@@ -9,6 +9,10 @@ impl NodeInfoId {
     pub fn id(&self) -> u64 {
         self.0
     }
+
+    pub(crate) fn index(&self) -> usize {
+        self.0 as usize
+    }
 }
 
 pub(crate) const OBJECT_OPEN_ID: NodeInfoId = NodeInfoId(0);
@@ -54,5 +58,9 @@ impl NodeInfo {
             node_type,
             is_open_tag: false,
         }
+    }
+
+    pub(crate) fn node_type(&self) -> &NodeType {
+        &self.node_type
     }
 }

@@ -1,7 +1,8 @@
 use vers_vecs::SparseRSVec;
 
-use crate::info::NodeInfoId;
+use crate::info::{self, NodeInfoId};
 
+#[derive(Debug)]
 pub struct NodeInfoVec {
     sparse_rs_vecs: Vec<SparseRSVec>,
     len: usize,
@@ -69,6 +70,16 @@ impl NodeInfoVec {
     ) -> Option<usize> {
         let s = self.sparse_rs_vecs[node_info_id.id() as usize].select1(rank) as usize;
         if self.len != s { Some(s) } else { None }
+    }
+
+    // in sparse bit vec for opening number, we can do a rank check to determine
+    // the number id
+    pub(crate) fn number_id(&self, i: usize) -> Option<usize> {
+        if i <= self.len {
+            Some(self.sparse_rs_vecs[info::NUMBER_OPEN_ID.index()].rank1(i as u64) as usize)
+        } else {
+            None
+        }
     }
 }
 

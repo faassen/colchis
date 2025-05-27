@@ -1,6 +1,11 @@
-use vers_vecs::BitVec;
+use vers_vecs::{BitVec, Tree};
 
-use crate::{structure::Structure, text_usage::TextUsage};
+use crate::{
+    info::NodeType,
+    parser::{JsonParseError, Parser},
+    structure::Structure,
+    text_usage::TextUsage,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Node(usize);
@@ -15,11 +20,12 @@ impl Node {
     }
 }
 
+#[derive(Debug)]
 pub struct Document {
-    structure: Structure,
-    text_usage: TextUsage,
-    numbers: Vec<f64>,
-    booleans: BitVec,
+    pub(crate) structure: Structure,
+    pub(crate) text_usage: TextUsage,
+    pub(crate) numbers: Vec<f64>,
+    pub(crate) booleans: BitVec,
 }
 
 impl Document {
@@ -35,5 +41,15 @@ impl Document {
             numbers,
             booleans,
         }
+    }
+
+    pub fn parse(json: &[u8]) -> Result<Document, JsonParseError> {
+        let parser = Parser::new(json);
+        parser.parse()
+    }
+
+    pub(crate) fn node_type(&self, node: Node) -> &NodeType {
+        let node_info = self.structure.node_info(node.get());
+        node_info.node_type()
     }
 }
