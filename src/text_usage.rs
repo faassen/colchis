@@ -15,6 +15,10 @@ impl TextBuilder {
         }
     }
 
+    pub(crate) fn heap_size(&self) -> usize {
+        self.s.len() + self.positions.len() * std::mem::size_of::<u64>()
+    }
+
     pub(crate) fn string_node(&mut self, text: &str) {
         self.s.push_str(text);
         // terminator $, the 0 byte
