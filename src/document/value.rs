@@ -30,8 +30,8 @@ impl Document {
             NodeType::Number => Value::Number(self.number_value(node)),
             NodeType::Boolean => Value::Boolean(self.boolean_value(node)),
             NodeType::Null => Value::Null,
-            NodeType::Field(s) => {
-                todo!()
+            NodeType::Field(_s) => {
+                unreachable!()
             }
         }
     }
@@ -145,16 +145,16 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_object() {
-    //     let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
-    //     let v = doc.root_value();
+    #[test]
+    fn test_object() {
+        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let v = doc.root_value();
 
-    //     if let Value::Object(object_value) = v {
-    //         assert_eq!(object_value.get("key1"), Some(Value::String("value1")));
-    //         assert_eq!(object_value.get("key2"), Some(Value::Number(42.0)));
-    //     } else {
-    //         panic!("Expected an object value");
-    //     }
-    // }
+        if let Value::Object(object_value) = v {
+            assert_eq!(object_value.get("key1"), Some(Value::String("value1")));
+            assert_eq!(object_value.get("key2"), Some(Value::Number(42.0)));
+        } else {
+            panic!("Expected an object value");
+        }
+    }
 }
