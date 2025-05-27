@@ -40,6 +40,24 @@ impl PartialEq for ArrayValue<'_> {
     }
 }
 
+impl<'a> IntoIterator for ArrayValue<'a> {
+    type Item = Value<'a>;
+    type IntoIter = ArrayIterator<'a>;
+
+    fn into_iter(self) -> ArrayIterator<'a> {
+        self.iter()
+    }
+}
+
+impl<'a> ArrayValue<'a> {
+    fn iter(&self) -> ArrayIterator<'a> {
+        ArrayIterator {
+            document: self.document,
+            node: self.document.primitive_first_child(self.node),
+        }
+    }
+}
+
 impl Document {
     pub fn value(&self, node: Node) -> Value<'_> {
         match self.node_type(node) {
@@ -47,7 +65,8 @@ impl Document {
                 todo!()
             }
             NodeType::Array => {
-                todo!()
+                let array_value = self.array_value(node);
+                Value::Array(array_value)
             }
             NodeType::String => {
                 let s = self.string_value(node);
@@ -80,6 +99,31 @@ impl Document {
     fn boolean_value(&self, node: Node) -> bool {
         let boolean_id = self.structure.boolean_id(node.get()).unwrap();
         self.booleans.is_bit_set_unchecked(boolean_id)
+    }
+
+    fn array_value(&self, node: Node) -> ArrayValue<'_> {
+        ArrayValue {
+            document: self,
+            node,
+        }
+    }
+}
+
+pub struct ArrayIterator<'a> {
+    document: &'a Document,
+    node: Option<Node>,
+}
+
+impl<'a> Iterator for ArrayIterator<'a> {
+    type Item = Value<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(node) = self.node {
+            self.node = self.document.primitive_next_sibling(node);
+            Some(self.document.value(node))
+        } else {
+            None
+        }
     }
 }
 
@@ -120,5 +164,21 @@ mod tests {
         let doc = Document::parse(r#""hello""#.as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::String("hello"));
+    }
+
+    #[test]
+    fn test_array() {
+        let doc = Document::parse(r#"["a", "b", "c"]"#.as_bytes()).unwrap();
+        let v = doc.root_value();
+
+        if let Value::Array(array_value) = v {
+            let mut iter = array_value.into_iter();
+            assert_eq!(iter.next(), Some(Value::String("a")));
+            assert_eq!(iter.next(), Some(Value::String("b")));
+            assert_eq!(iter.next(), Some(Value::String("c")));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("Expected an array value");
+        }
     }
 }

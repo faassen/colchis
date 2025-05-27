@@ -19,4 +19,11 @@ impl Document {
     pub(crate) fn primitive_first_child(&self, node: Node) -> Option<Node> {
         self.structure.tree().first_child(node.get()).map(Node::new)
     }
+
+    pub(crate) fn primitive_next_sibling(&self, node: Node) -> Option<Node> {
+        self.structure
+            .tree()
+            .next_sibling(node.get())
+            .map(Node::new)
+    }
 }
