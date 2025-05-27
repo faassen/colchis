@@ -1,11 +1,9 @@
-use vers_vecs::{BitVec, BpTree, RsVec};
+use vers_vecs::BpTree;
 
 use crate::{
     info::{NodeInfo, NodeInfoId},
     lookup::NodeLookup,
     node_info_vec::NodeInfoVec,
-    parser::Builder,
-    text_usage::TextUsage,
     tree_builder::TreeBuilder,
 };
 
