@@ -10,13 +10,6 @@ pub struct NodeInfoVec {
 
 impl NodeInfoVec {
     pub(crate) fn new(usage: Vec<Vec<u64>>, amount: usize) -> Self {
-        // let mut all_positions: Vec<Vec<u64>> = vec![vec![]; amount];
-        // for (i, entry) in tags_usage.iter().enumerate() {
-        //     let positions = all_positions
-        //         .get_mut(*entry as usize)
-        //         .expect("Entry should be present");
-        //     positions.push(i as u64);
-        // }
         let sparse_rs_vecs = usage
             .into_iter()
             .map(|positions| SparseRSVec::new(&positions, amount as u64))
