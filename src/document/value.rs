@@ -1,3 +1,7 @@
+use std::io::Write;
+
+use struson::writer::{JsonStreamWriter, JsonWriter};
+
 use crate::{info::NodeType, text_usage::TextId};
 
 use super::{Document, Node, ObjectValue, array::ArrayValue};
@@ -10,6 +14,27 @@ pub enum Value<'a> {
     Number(f64),
     Boolean(bool),
     Null,
+}
+
+impl<'a> Value<'a> {
+    pub fn serialize<W: Write>(&self, writer: &mut JsonStreamWriter<W>) -> std::io::Result<()> {
+        match self {
+            Value::Object(object) => object.serialize(writer),
+            Value::Array(array) => array.serialize(writer),
+            Value::String(s) => writer.string_value(s),
+            Value::Number(n) => match writer.fp_number_value(*n) {
+                Ok(_) => Ok(()),
+                Err(e) => match e {
+                    struson::writer::JsonNumberError::IoError(e) => Err(e),
+                    _ => {
+                        unreachable!();
+                    }
+                },
+            },
+            Value::Boolean(b) => writer.bool_value(*b),
+            Value::Null => writer.null_value(),
+        }
+    }
 }
 
 impl Document {

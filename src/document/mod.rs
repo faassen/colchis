@@ -2,6 +2,7 @@ mod array;
 mod core;
 mod nav;
 mod object;
+mod serialize;
 mod value;
 
 pub use array::ArrayValue;

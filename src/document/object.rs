@@ -1,3 +1,5 @@
+use struson::writer::{JsonStreamWriter, JsonWriter};
+
 use crate::info::NodeType;
 
 use super::{Document, Node, Value};
@@ -53,6 +55,18 @@ impl<'a> ObjectValue<'a> {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
         }
+    }
+
+    pub fn serialize<W: std::io::Write>(
+        &self,
+        writer: &mut JsonStreamWriter<W>,
+    ) -> std::io::Result<()> {
+        writer.begin_object()?;
+        for (key, value) in self.iter() {
+            writer.name(key)?;
+            value.serialize(writer)?;
+        }
+        writer.end_object()
     }
 }
 

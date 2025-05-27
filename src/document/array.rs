@@ -1,3 +1,7 @@
+use std::io::Write;
+
+use struson::writer::{JsonStreamWriter, JsonWriter};
+
 use super::{Document, Node, value::Value};
 
 #[derive(Debug, Clone)]
@@ -33,6 +37,14 @@ impl<'a> ArrayValue<'a> {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
         }
+    }
+
+    pub fn serialize<W: Write>(&self, writer: &mut JsonStreamWriter<W>) -> std::io::Result<()> {
+        writer.begin_array()?;
+        for value in self.iter() {
+            value.serialize(writer)?;
+        }
+        writer.end_array()
     }
 }
 
