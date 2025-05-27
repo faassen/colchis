@@ -1,7 +1,7 @@
 use colchis::Document;
 use std::env;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 
 fn main() -> io::Result<()> {
     // Check for command line arguments
