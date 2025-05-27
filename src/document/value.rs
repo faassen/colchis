@@ -107,6 +107,13 @@ impl Document {
             node,
         }
     }
+
+    fn object_value(&self, node: Node) -> ObjectValue<'_> {
+        ObjectValue {
+            document: self,
+            node,
+        }
+    }
 }
 
 pub struct ArrayIterator<'a> {
@@ -176,6 +183,31 @@ mod tests {
             assert_eq!(iter.next(), Some(Value::String("a")));
             assert_eq!(iter.next(), Some(Value::String("b")));
             assert_eq!(iter.next(), Some(Value::String("c")));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("Expected an array value");
+        }
+    }
+
+    #[test]
+    fn test_nested_array() {
+        let doc = Document::parse(r#"[1, [2, 3], 4]"#.as_bytes()).unwrap();
+        let v = doc.root_value();
+
+        if let Value::Array(array_value) = v {
+            let mut iter = array_value.into_iter();
+            assert_eq!(iter.next(), Some(Value::Number(1.0)));
+
+            if let Some(Value::Array(inner_array)) = iter.next() {
+                let mut inner_iter = inner_array.into_iter();
+                assert_eq!(inner_iter.next(), Some(Value::Number(2.0)));
+                assert_eq!(inner_iter.next(), Some(Value::Number(3.0)));
+                assert_eq!(inner_iter.next(), None);
+            } else {
+                panic!("Expected an inner array value");
+            }
+
+            assert_eq!(iter.next(), Some(Value::Number(4.0)));
             assert_eq!(iter.next(), None);
         } else {
             panic!("Expected an array value");
