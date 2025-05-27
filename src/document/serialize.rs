@@ -19,9 +19,7 @@ impl Document {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_round_trip_number() {
-        let input = "42";
+    fn assert_round_trip(input: &str) {
         // parse document from a string
         let doc = Document::parse(input.as_bytes()).unwrap();
         // serialize to a string
@@ -29,5 +27,36 @@ mod tests {
         doc.serialize(&mut output).unwrap();
         // check that the output is the same as the input
         assert_eq!(String::from_utf8(output).unwrap(), input);
+    }
+
+    #[test]
+    fn test_round_trip_number() {
+        assert_round_trip("42");
+    }
+
+    #[test]
+    fn test_round_trip_boolean() {
+        assert_round_trip("true");
+        assert_round_trip("false");
+    }
+
+    #[test]
+    fn test_round_trip_null() {
+        assert_round_trip("null");
+    }
+
+    #[test]
+    fn test_round_trip_string() {
+        assert_round_trip(r#""hello""#);
+    }
+
+    #[test]
+    fn test_round_trip_array() {
+        assert_round_trip(r#"["a","b","c"]"#);
+    }
+
+    #[test]
+    fn test_round_trip_object() {
+        assert_round_trip(r#"{"key1":"value1","key2":"value2"}"#);
     }
 }
