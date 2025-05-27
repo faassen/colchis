@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use vers_vecs::{BitVec, Tree};
 
 use crate::{
@@ -50,7 +52,7 @@ impl Document {
             + self.booleans.heap_size()
     }
 
-    pub fn parse(json: &[u8]) -> Result<Document, JsonParseError> {
+    pub fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
         let parser = Parser::new(json);
         parser.parse()
     }

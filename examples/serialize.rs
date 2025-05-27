@@ -13,12 +13,10 @@ fn main() -> io::Result<()> {
 
     // Read from file
     let file_path = &args[1];
-    let mut file = File::open(file_path)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
+    let file = File::open(file_path)?;
 
     // Parse the JSON document
-    match Document::parse(&contents) {
+    match Document::parse(file) {
         Ok(document) => {
             // serializing it again to stdout
             document

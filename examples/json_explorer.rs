@@ -14,12 +14,10 @@ fn main() -> io::Result<()> {
     // Read from file
     let file_path = &args[1];
     println!("Reading JSON from file: {}", file_path);
-    let mut file = File::open(file_path)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
-
-    // Parse the JSON document
-    match Document::parse(&contents) {
+    let file = File::open(file_path)?;
+    // do not use a buffer, get a reader to avoid unnecessary memory usage
+    // no need for a bufreader as struson handles buffering internally
+    match Document::parse(&file) {
         Ok(document) => {
             // Display document information
             println!("\n===== JSON Document Analysis =====");
