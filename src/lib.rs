@@ -7,7 +7,6 @@ mod structure;
 mod text_usage;
 mod tree_builder;
 mod usage;
-mod value_usage;
 
 pub use document::{Document, Node};
 pub use usage::RoaringUsageBuilder;
