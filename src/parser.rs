@@ -71,15 +71,20 @@ impl From<ParseFloatError> for JsonParseError {
 
 static TICK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+pub(crate) fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
+    let parser = Parser::new(json);
+    parser.parse()
+}
+
 impl<R: Read> Parser<R> {
-    pub(crate) fn new(json: R) -> Self {
+    fn new(json: R) -> Self {
         Self {
             reader: JsonStreamReader::new(json),
             builder: Builder::new(),
         }
     }
 
-    pub(crate) fn parse(mut self) -> Result<Document, JsonParseError> {
+    fn parse(mut self) -> Result<Document, JsonParseError> {
         self.parse_item()?;
         let structure = Structure::<EliasFanoUsageIndex>::new(self.builder.tree_builder);
         let text_usage = self.builder.text_builder.build();

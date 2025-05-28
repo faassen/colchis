@@ -4,7 +4,7 @@ use vers_vecs::{BitVec, Tree};
 
 use crate::{
     info::NodeType,
-    parser::{JsonParseError, Parser},
+    parser::{JsonParseError, Parser, parse},
     structure::Structure,
     text_usage::TextUsage,
     usage::{EliasFanoUsageIndex, RoaringUsageBuilder, UsageBuilder, UsageIndex},
@@ -54,8 +54,7 @@ impl Document {
     }
 
     pub fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
-        let parser = Parser::<R>::new(json);
-        parser.parse()
+        parse::<R>(json)
     }
 
     pub(crate) fn node_type(&self, node: Node) -> &NodeType {
