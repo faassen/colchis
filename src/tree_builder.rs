@@ -1,3 +1,4 @@
+use roaring::RoaringBitmap;
 use vers_vecs::BitVec;
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
 pub(crate) struct TreeBuilder {
     pub(crate) node_lookup: NodeLookup,
     pub(crate) parentheses: BitVec,
-    pub(crate) usage: Vec<Vec<u64>>,
+    pub(crate) usage: Vec<RoaringBitmap>,
 }
 
 impl TreeBuilder {
@@ -26,10 +27,14 @@ impl TreeBuilder {
     }
 
     pub(crate) fn usage_heap_size(&self) -> usize {
-        // a sum of u64 vectors
         self.usage
             .iter()
-            .map(|v| v.len() * std::mem::size_of::<u64>())
+            .map(|v| {
+                let stats = v.statistics();
+                (stats.n_bytes_array_containers
+                    + stats.n_bytes_run_containers
+                    + stats.n_bytes_bitset_containers) as usize
+            })
             .sum::<usize>()
     }
 
@@ -67,11 +72,11 @@ impl TreeBuilder {
         // get the positions for this node_info_id; make it an empty vec if it doesn't exist yet
         let i = node_info_id.id() as usize;
         if self.usage.len() <= i {
-            self.usage.resize(i + 1, Vec::new());
+            self.usage.resize(i + 1, RoaringBitmap::new());
         }
         let positions = self.usage.get_mut(i).expect("Entry should be present");
         // note that we should push parentheses after we push usage
-        positions.push(self.parentheses.len() as u64)
+        positions.push(self.parentheses.len() as u32);
     }
 
     pub(crate) fn build(self) -> Structure {
