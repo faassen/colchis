@@ -1,6 +1,6 @@
 use vers_vecs::BitVec;
 
-use crate::{info::NodeType, structure::Structure, usage::UsageBuilder};
+use crate::{info::NodeType, usage::UsageBuilder};
 
 pub(crate) struct TreeBuilder<T: UsageBuilder> {
     pub(crate) usage_builder: T,
