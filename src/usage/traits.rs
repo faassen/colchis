@@ -6,6 +6,8 @@ use crate::{
 // TODO: these traits should be sealed somehow
 
 pub trait UsageBuilder {
+    type Index: UsageIndex;
+
     fn new() -> Self;
 
     fn heap_size(&self) -> usize;
@@ -25,6 +27,8 @@ pub trait UsageBuilder {
     }
 
     fn append(&mut self, node_info_id: NodeInfoId);
+
+    fn build(self) -> Self::Index;
 }
 
 pub trait UsageIndex {

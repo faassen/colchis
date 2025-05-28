@@ -2,7 +2,7 @@ use roaring::RoaringBitmap;
 
 use crate::{info::NodeInfoId, lookup::NodeLookup};
 
-use super::traits::UsageBuilder;
+use super::{EliasFanoUsageIndex, traits::UsageBuilder};
 
 pub struct RoaringUsageBuilder {
     pub(crate) usage: Vec<RoaringBitmap>,
@@ -25,6 +25,8 @@ impl RoaringUsageBuilder {
 }
 
 impl UsageBuilder for RoaringUsageBuilder {
+    type Index = EliasFanoUsageIndex;
+
     fn new() -> Self {
         Self {
             usage: Vec::new(),
@@ -51,5 +53,9 @@ impl UsageBuilder for RoaringUsageBuilder {
         // TODO: fail if we go over u32
         positions.push(self.len as u32);
         self.len += 1;
+    }
+
+    fn build(self) -> Self::Index {
+        EliasFanoUsageIndex::new(self)
     }
 }
