@@ -1,6 +1,10 @@
+use std::io::Read;
+
 use crate::{
+    Document,
     info::{NodeInfo, NodeInfoId, NodeType},
     lookup::NodeLookup,
+    parser::JsonParseError,
 };
 
 // TODO: these traits should be sealed somehow
@@ -29,6 +33,13 @@ pub trait UsageBuilder {
     fn append(&mut self, node_info_id: NodeInfoId);
 
     fn build(self) -> Self::Index;
+
+    fn parse<R: Read>(json: R) -> Result<Document<Self::Index>, JsonParseError>
+    where
+        Self: Sized,
+    {
+        crate::parser::parse::<R, Self>(json)
+    }
 }
 
 pub trait UsageIndex {
