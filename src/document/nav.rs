@@ -1,8 +1,10 @@
 use vers_vecs::Tree;
 
+use crate::usage::UsageIndex;
+
 use super::{Document, Node};
 
-impl Document {
+impl<U: UsageIndex> Document<U> {
     pub fn root(&self) -> Node {
         Node::new(
             self.structure

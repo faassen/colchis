@@ -13,22 +13,22 @@ use crate::{
     structure::Structure,
     text_usage::TextBuilder,
     tree_builder::TreeBuilder,
-    usage::{EliasFanoUsageIndex, RoaringUsageBuilder},
+    usage::{EliasFanoUsageIndex, RoaringUsageBuilder, UsageBuilder, UsageIndex},
 };
 
-pub(crate) struct Parser<R: Read> {
+pub(crate) struct Parser<R: Read, B: UsageBuilder> {
     reader: JsonStreamReader<R>,
-    builder: Builder,
+    builder: Builder<B>,
 }
 
-pub(crate) struct Builder {
-    pub(crate) tree_builder: TreeBuilder<RoaringUsageBuilder>,
+pub(crate) struct Builder<B: UsageBuilder> {
+    pub(crate) tree_builder: TreeBuilder<B>,
     pub(crate) text_builder: TextBuilder,
     pub(crate) numbers: Vec<f64>,
     pub(crate) booleans: BitVec,
 }
 
-impl Builder {
+impl<B: UsageBuilder> Builder<B> {
     pub(crate) fn new() -> Self {
         Self {
             tree_builder: TreeBuilder::new(),
@@ -71,12 +71,14 @@ impl From<ParseFloatError> for JsonParseError {
 
 static TICK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-pub(crate) fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
-    let parser = Parser::new(json);
+pub(crate) fn parse<R: Read, B: UsageBuilder>(
+    json: R,
+) -> Result<Document<B::Index>, JsonParseError> {
+    let parser = Parser::<R, B>::new(json);
     parser.parse()
 }
 
-impl<R: Read> Parser<R> {
+impl<R: Read, B: UsageBuilder> Parser<R, B> {
     fn new(json: R) -> Self {
         Self {
             reader: JsonStreamReader::new(json),
@@ -84,9 +86,9 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn parse(mut self) -> Result<Document, JsonParseError> {
+    fn parse(mut self) -> Result<Document<B::Index>, JsonParseError> {
         self.parse_item()?;
-        let structure = Structure::<EliasFanoUsageIndex>::new(self.builder.tree_builder);
+        let structure = Structure::<B::Index>::new(self.builder.tree_builder);
         let text_usage = self.builder.text_builder.build();
         Ok(Document::new(
             structure,

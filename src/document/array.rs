@@ -2,37 +2,39 @@ use std::io::Write;
 
 use struson::writer::{JsonStreamWriter, JsonWriter};
 
+use crate::usage::UsageIndex;
+
 use super::{Document, Node, value::Value};
 
 #[derive(Debug, Clone)]
-pub struct ArrayValue<'a> {
-    document: &'a Document,
+pub struct ArrayValue<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Node,
 }
 
-impl PartialEq for ArrayValue<'_> {
+impl<U: UsageIndex> PartialEq for ArrayValue<'_, U> {
     fn eq(&self, other: &Self) -> bool {
         // document reference equality
         self.node == other.node
-            && self.document as *const Document == other.document as *const Document
+            && self.document as *const Document<U> == other.document as *const Document<U>
     }
 }
 
-impl<'a> IntoIterator for ArrayValue<'a> {
-    type Item = Value<'a>;
-    type IntoIter = ArrayIterator<'a>;
+impl<'a, U: UsageIndex> IntoIterator for ArrayValue<'a, U> {
+    type Item = Value<'a, U>;
+    type IntoIter = ArrayIterator<'a, U>;
 
-    fn into_iter(self) -> ArrayIterator<'a> {
+    fn into_iter(self) -> ArrayIterator<'a, U> {
         self.iter()
     }
 }
 
-impl<'a> ArrayValue<'a> {
-    pub(crate) fn new(document: &'a Document, node: Node) -> Self {
+impl<'a, U: UsageIndex> ArrayValue<'a, U> {
+    pub(crate) fn new(document: &'a Document<U>, node: Node) -> Self {
         Self { document, node }
     }
 
-    fn iter(&self) -> ArrayIterator<'a> {
+    fn iter(&self) -> ArrayIterator<'a, U> {
         ArrayIterator {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
@@ -48,13 +50,13 @@ impl<'a> ArrayValue<'a> {
     }
 }
 
-pub struct ArrayIterator<'a> {
-    document: &'a Document,
+pub struct ArrayIterator<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Option<Node>,
 }
 
-impl<'a> Iterator for ArrayIterator<'a> {
-    type Item = Value<'a>;
+impl<'a, U: UsageIndex> Iterator for ArrayIterator<'a, U> {
+    type Item = Value<'a, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(node) = self.node {

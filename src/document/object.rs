@@ -1,56 +1,56 @@
 use struson::writer::{JsonStreamWriter, JsonWriter};
 
-use crate::info::NodeType;
+use crate::{info::NodeType, usage::UsageIndex};
 
 use super::{Document, Node, Value};
 
 #[derive(Debug, Clone)]
-pub struct ObjectValue<'a> {
-    document: &'a Document,
+pub struct ObjectValue<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Node,
 }
 
-impl PartialEq for ObjectValue<'_> {
+impl<U: UsageIndex> PartialEq for ObjectValue<'_, U> {
     fn eq(&self, other: &Self) -> bool {
         // document reference equality
         self.node == other.node
-            && self.document as *const Document == other.document as *const Document
+            && self.document as *const Document<U> == other.document as *const Document<U>
     }
 }
 
-impl<'a> IntoIterator for ObjectValue<'a> {
-    type Item = (&'a str, Value<'a>);
-    type IntoIter = FieldEntryIterator<'a>;
+impl<'a, U: UsageIndex> IntoIterator for ObjectValue<'a, U> {
+    type Item = (&'a str, Value<'a, U>);
+    type IntoIter = FieldEntryIterator<'a, U>;
 
-    fn into_iter(self) -> FieldEntryIterator<'a> {
+    fn into_iter(self) -> FieldEntryIterator<'a, U> {
         self.iter()
     }
 }
 
-impl<'a> ObjectValue<'a> {
-    pub(crate) fn new(document: &'a Document, node: Node) -> Self {
+impl<'a, U: UsageIndex> ObjectValue<'a, U> {
+    pub(crate) fn new(document: &'a Document<U>, node: Node) -> Self {
         Self { document, node }
     }
 
-    pub fn get(&self, key: &str) -> Option<Value<'a>> {
+    pub fn get(&self, key: &str) -> Option<Value<'a, U>> {
         self.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
     }
 
-    pub fn keys(&self) -> FieldKeyIterator<'a> {
+    pub fn keys(&self) -> FieldKeyIterator<'a, U> {
         FieldKeyIterator {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
         }
     }
 
-    pub fn values(&self) -> FieldValueIterator<'a> {
+    pub fn values(&self) -> FieldValueIterator<'a, U> {
         FieldValueIterator {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
         }
     }
 
-    pub fn iter(&self) -> FieldEntryIterator<'a> {
+    pub fn iter(&self) -> FieldEntryIterator<'a, U> {
         FieldEntryIterator {
             document: self.document,
             node: self.document.primitive_first_child(self.node),
@@ -70,12 +70,12 @@ impl<'a> ObjectValue<'a> {
     }
 }
 
-pub struct FieldKeyIterator<'a> {
-    document: &'a Document,
+pub struct FieldKeyIterator<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Option<Node>,
 }
 
-impl<'a> Iterator for FieldKeyIterator<'a> {
+impl<'a, U: UsageIndex> Iterator for FieldKeyIterator<'a, U> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -93,13 +93,13 @@ impl<'a> Iterator for FieldKeyIterator<'a> {
     }
 }
 
-pub struct FieldValueIterator<'a> {
-    document: &'a Document,
+pub struct FieldValueIterator<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Option<Node>,
 }
 
-impl<'a> Iterator for FieldValueIterator<'a> {
-    type Item = Value<'a>;
+impl<'a, U: UsageIndex> Iterator for FieldValueIterator<'a, U> {
+    type Item = Value<'a, U>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(node) = self.node {
@@ -114,13 +114,13 @@ impl<'a> Iterator for FieldValueIterator<'a> {
     }
 }
 
-pub struct FieldEntryIterator<'a> {
-    document: &'a Document,
+pub struct FieldEntryIterator<'a, U: UsageIndex> {
+    document: &'a Document<U>,
     node: Option<Node>,
 }
 
-impl<'a> Iterator for FieldEntryIterator<'a> {
-    type Item = (&'a str, Value<'a>);
+impl<'a, U: UsageIndex> Iterator for FieldEntryIterator<'a, U> {
+    type Item = (&'a str, Value<'a, U>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(node) = self.node {

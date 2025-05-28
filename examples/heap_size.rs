@@ -1,4 +1,4 @@
-use colchis::Document;
+use colchis::{Document, RoaringUsageBuilder};
 use std::io;
 
 fn main() -> io::Result<()> {
@@ -17,7 +17,8 @@ fn main() -> io::Result<()> {
 
     // Parse the JSON document
     println!("Parsing sample JSON document...");
-    let document = Document::parse(sample_json.as_bytes()).expect("Failed to parse JSON document");
+    let document = Document::parse::<RoaringUsageBuilder, _>(sample_json.as_bytes())
+        .expect("Failed to parse JSON document");
 
     // Report heap size
     let heap_size = document.heap_size();

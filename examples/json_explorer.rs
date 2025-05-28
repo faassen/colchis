@@ -1,4 +1,4 @@
-use colchis::Document;
+use colchis::{Document, RoaringUsageBuilder};
 use std::env;
 use std::fs::File;
 use std::io;
@@ -17,7 +17,7 @@ fn main() -> io::Result<()> {
     let file = File::open(file_path)?;
     // do not use a buffer, get a reader to avoid unnecessary memory usage
     // no need for a bufreader as struson handles buffering internally
-    match Document::parse(&file) {
+    match Document::parse::<RoaringUsageBuilder, _>(&file) {
         Ok(document) => {
             // Display document information
             println!("\n===== JSON Document Analysis =====");

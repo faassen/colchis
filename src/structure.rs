@@ -12,10 +12,10 @@ pub(crate) struct Structure<T: UsageIndex> {
     tree: BpTree,
 }
 
-impl<T: UsageIndex> Structure<T> {
-    pub(crate) fn new<B: UsageBuilder + Into<T>>(tree_builder: TreeBuilder<B>) -> Self {
+impl<U: UsageIndex> Structure<U> {
+    pub(crate) fn new<B: UsageBuilder<Index = U>>(tree_builder: TreeBuilder<B>) -> Self {
         let tree = BpTree::from_bit_vector(tree_builder.parentheses);
-        let usage_index: T = tree_builder.usage_builder.into();
+        let usage_index = tree_builder.usage_builder.build();
 
         Self { usage_index, tree }
     }

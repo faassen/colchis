@@ -24,16 +24,16 @@ impl Node {
 }
 
 #[derive(Debug)]
-pub struct Document {
-    pub(crate) structure: Structure<EliasFanoUsageIndex>,
+pub struct Document<U: UsageIndex> {
+    pub(crate) structure: Structure<U>,
     pub(crate) text_usage: TextUsage,
     pub(crate) numbers: Vec<f64>,
     pub(crate) booleans: BitVec,
 }
 
-impl Document {
+impl<U: UsageIndex> Document<U> {
     pub(crate) fn new(
-        structure: Structure<EliasFanoUsageIndex>,
+        structure: Structure<U>,
         text_usage: TextUsage,
         numbers: Vec<f64>,
         booleans: BitVec,
@@ -53,8 +53,10 @@ impl Document {
             + self.booleans.heap_size()
     }
 
-    pub fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
-        parse::<R>(json)
+    pub fn parse<B: UsageBuilder<Index = U>, R: Read>(
+        json: R,
+    ) -> Result<Document<B::Index>, JsonParseError> {
+        parse::<R, B>(json)
     }
 
     pub(crate) fn node_type(&self, node: Node) -> &NodeType {

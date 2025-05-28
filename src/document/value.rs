@@ -2,21 +2,35 @@ use std::io::Write;
 
 use struson::writer::{JsonStreamWriter, JsonWriter};
 
-use crate::{info::NodeType, text_usage::TextId};
+use crate::{info::NodeType, text_usage::TextId, usage::UsageIndex};
 
 use super::{Document, Node, ObjectValue, array::ArrayValue};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value<'a> {
-    Object(ObjectValue<'a>),
-    Array(ArrayValue<'a>),
+#[derive(Debug, Clone)]
+pub enum Value<'a, U: UsageIndex> {
+    Object(ObjectValue<'a, U>),
+    Array(ArrayValue<'a, U>),
     String(&'a str),
     Number(f64),
     Boolean(bool),
     Null,
 }
 
-impl<'a> Value<'a> {
+impl<U: UsageIndex> PartialEq for Value<'_, U> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Object(a), Value::Object(b)) => a == b,
+            (Value::Array(a), Value::Array(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Number(a), Value::Number(b)) => a == b,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<'a, U: UsageIndex> Value<'a, U> {
     pub fn serialize<W: Write>(&self, writer: &mut JsonStreamWriter<W>) -> std::io::Result<()> {
         match self {
             Value::Object(object) => object.serialize(writer),
@@ -37,8 +51,8 @@ impl<'a> Value<'a> {
     }
 }
 
-impl Document {
-    pub fn value(&self, node: Node) -> Value<'_> {
+impl<U: UsageIndex> Document<U> {
+    pub fn value(&self, node: Node) -> Value<'_, U> {
         match self.node_type(node) {
             NodeType::Object => {
                 let object_value = self.object_value(node);
@@ -60,7 +74,7 @@ impl Document {
             }
         }
     }
-    pub fn root_value(&self) -> Value<'_> {
+    pub fn root_value(&self) -> Value<'_, U> {
         let root = self.root();
         self.value(root)
     }
@@ -81,57 +95,60 @@ impl Document {
         self.booleans.is_bit_set_unchecked(boolean_id)
     }
 
-    fn array_value(&self, node: Node) -> ArrayValue<'_> {
+    fn array_value(&self, node: Node) -> ArrayValue<'_, U> {
         ArrayValue::new(self, node)
     }
 
-    fn object_value(&self, node: Node) -> ObjectValue<'_> {
+    fn object_value(&self, node: Node) -> ObjectValue<'_, U> {
         ObjectValue::new(self, node)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::usage::{EliasFanoUsageIndex, RoaringUsageBuilder};
+
     use super::*;
 
     #[test]
     fn test_number_value() {
-        let doc = Document::parse("42".as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>("42".as_bytes()).unwrap();
         let v = doc.root_value();
-        assert_eq!(v, Value::Number(42f64));
+        assert_eq!(v, Value::<'_, EliasFanoUsageIndex>::Number(42f64));
     }
 
     #[test]
     fn test_boolean_value_true() {
-        let doc = Document::parse("true".as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>("true".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Boolean(true));
     }
 
     #[test]
     fn test_boolean_value_false() {
-        let doc = Document::parse("false".as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>("false".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Boolean(false));
     }
 
     #[test]
     fn test_null_value() {
-        let doc = Document::parse("null".as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>("null".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Null);
     }
 
     #[test]
     fn test_string_value() {
-        let doc = Document::parse(r#""hello""#.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(r#""hello""#.as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::String("hello"));
     }
 
     #[test]
     fn test_array() {
-        let doc = Document::parse(r#"["a", "b", "c"]"#.as_bytes()).unwrap();
+        let doc =
+            Document::parse::<RoaringUsageBuilder, _>(r#"["a", "b", "c"]"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Array(array_value) = v {
@@ -147,7 +164,8 @@ mod tests {
 
     #[test]
     fn test_nested_array() {
-        let doc = Document::parse(r#"[1, [2, 3], 4]"#.as_bytes()).unwrap();
+        let doc =
+            Document::parse::<RoaringUsageBuilder, _>(r#"[1, [2, 3], 4]"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Array(array_value) = v {
@@ -172,7 +190,10 @@ mod tests {
 
     #[test]
     fn test_object() {
-        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(
+            r#"{"key1": "value1", "key2": 42}"#.as_bytes(),
+        )
+        .unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
@@ -185,7 +206,10 @@ mod tests {
 
     #[test]
     fn test_object_keys() {
-        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(
+            r#"{"key1": "value1", "key2": 42}"#.as_bytes(),
+        )
+        .unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
@@ -198,7 +222,10 @@ mod tests {
 
     #[test]
     fn test_object_values() {
-        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(
+            r#"{"key1": "value1", "key2": 42}"#.as_bytes(),
+        )
+        .unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
@@ -211,7 +238,10 @@ mod tests {
 
     #[test]
     fn test_object_entries() {
-        let doc = Document::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(
+            r#"{"key1": "value1", "key2": 42}"#.as_bytes(),
+        )
+        .unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {

@@ -10,3 +10,4 @@ mod usage;
 mod value_usage;
 
 pub use document::{Document, Node};
+pub use usage::RoaringUsageBuilder;

@@ -2,9 +2,11 @@ use std::io::Write;
 
 use struson::writer::{JsonStreamWriter, JsonWriter};
 
+use crate::usage::UsageIndex;
+
 use super::Document;
 
-impl Document {
+impl<U: UsageIndex> Document<U> {
     pub fn serialize<W: Write>(&self, mut w: W) -> std::io::Result<()> {
         let mut writer = JsonStreamWriter::new(&mut w);
 
@@ -17,11 +19,13 @@ impl Document {
 
 #[cfg(test)]
 mod tests {
+    use crate::usage::RoaringUsageBuilder;
+
     use super::*;
 
     fn assert_round_trip(input: &str) {
         // parse document from a string
-        let doc = Document::parse(input.as_bytes()).unwrap();
+        let doc = Document::parse::<RoaringUsageBuilder, _>(input.as_bytes()).unwrap();
         // serialize to a string
         let mut output = Vec::new();
         doc.serialize(&mut output).unwrap();
