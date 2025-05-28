@@ -8,7 +8,12 @@ use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ValueType};
 use vers_vecs::BitVec;
 
 use crate::{
-    document::Document, info::NodeType, text_usage::TextBuilder, tree_builder::TreeBuilder,
+    document::Document,
+    info::NodeType,
+    structure::Structure,
+    text_usage::TextBuilder,
+    tree_builder::TreeBuilder,
+    usage::{EliasFanoUsageIndex, RoaringUsageBuilder},
 };
 
 pub(crate) struct Parser<R: Read> {
@@ -17,7 +22,7 @@ pub(crate) struct Parser<R: Read> {
 }
 
 pub(crate) struct Builder {
-    pub(crate) tree_builder: TreeBuilder,
+    pub(crate) tree_builder: TreeBuilder<RoaringUsageBuilder>,
     pub(crate) text_builder: TextBuilder,
     pub(crate) numbers: Vec<f64>,
     pub(crate) booleans: BitVec,
@@ -76,7 +81,7 @@ impl<R: Read> Parser<R> {
 
     pub(crate) fn parse(mut self) -> Result<Document, JsonParseError> {
         self.parse_item()?;
-        let structure = self.builder.tree_builder.build();
+        let structure = Structure::<EliasFanoUsageIndex>::new(self.builder.tree_builder);
         let text_usage = self.builder.text_builder.build();
         Ok(Document::new(
             structure,

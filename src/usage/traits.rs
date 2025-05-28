@@ -3,7 +3,11 @@ use crate::{
     lookup::NodeLookup,
 };
 
-pub(crate) trait UsageBuilder {
+// TODO: these traits should be sealed somehow
+
+pub trait UsageBuilder {
+    fn new() -> Self;
+
     fn heap_size(&self) -> usize;
 
     fn node_lookup_mut(&mut self) -> &mut NodeLookup;
@@ -21,17 +25,12 @@ pub(crate) trait UsageBuilder {
     }
 
     fn append(&mut self, node_info_id: NodeInfoId);
-
-    // TODO: what we want:
-    // build a usage builder, and then pass it to the constructor
-    // of a specific UsageIndex implementation, so that we
-    // can support multiple usage index implementations
-    fn build(self) -> impl UsageIndex;
 }
 
-pub(crate) trait UsageIndex {
+pub trait UsageIndex {
     fn heap_size(&self) -> usize;
 
+    fn node_lookup(&self) -> &NodeLookup;
     /// The node info id at a position i in the structure.
     fn node_info_id(&self, i: usize) -> Option<NodeInfoId>;
 

@@ -7,6 +7,7 @@ use crate::{
     parser::{JsonParseError, Parser},
     structure::Structure,
     text_usage::TextUsage,
+    usage::{EliasFanoUsageIndex, RoaringUsageBuilder, UsageBuilder, UsageIndex},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,7 +25,7 @@ impl Node {
 
 #[derive(Debug)]
 pub struct Document {
-    pub(crate) structure: Structure,
+    pub(crate) structure: Structure<EliasFanoUsageIndex>,
     pub(crate) text_usage: TextUsage,
     pub(crate) numbers: Vec<f64>,
     pub(crate) booleans: BitVec,
@@ -32,7 +33,7 @@ pub struct Document {
 
 impl Document {
     pub(crate) fn new(
-        structure: Structure,
+        structure: Structure<EliasFanoUsageIndex>,
         text_usage: TextUsage,
         numbers: Vec<f64>,
         booleans: BitVec,
@@ -53,7 +54,7 @@ impl Document {
     }
 
     pub fn parse<R: Read>(json: R) -> Result<Document, JsonParseError> {
-        let parser = Parser::new(json);
+        let parser = Parser::<R>::new(json);
         parser.parse()
     }
 

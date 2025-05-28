@@ -6,7 +6,8 @@ use crate::{
     lookup::NodeLookup,
 };
 
-pub(crate) struct EliasFanoUsageIndex {
+#[derive(Debug)]
+pub struct EliasFanoUsageIndex {
     sparse_rs_vecs: Vec<SparseRSVec>,
     node_lookup: NodeLookup,
     len: usize,
@@ -31,9 +32,19 @@ impl EliasFanoUsageIndex {
     }
 }
 
+impl From<RoaringUsageBuilder> for EliasFanoUsageIndex {
+    fn from(builder: RoaringUsageBuilder) -> Self {
+        Self::new(builder)
+    }
+}
+
 impl UsageIndex for EliasFanoUsageIndex {
     fn heap_size(&self) -> usize {
         self.sparse_rs_vecs.iter().map(|v| v.heap_size()).sum()
+    }
+
+    fn node_lookup(&self) -> &NodeLookup {
+        &self.node_lookup
     }
 
     fn node_info_id(&self, i: usize) -> Option<NodeInfoId> {

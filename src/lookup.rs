@@ -3,7 +3,7 @@ use ahash::HashMap;
 use crate::info::{self, NodeInfo, NodeInfoId, NodeType};
 
 #[derive(Debug)]
-pub(crate) struct NodeLookup {
+pub struct NodeLookup {
     node_infos: Vec<NodeInfo>,
     node_info_lookup: HashMap<NodeInfo, NodeInfoId>,
 }
