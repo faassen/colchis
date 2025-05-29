@@ -1,4 +1,4 @@
-use colchis::{Document, RoaringUsageBuilder};
+use colchis::{BitpackingUsageBuilder, Document};
 use std::env;
 use std::fs::File;
 use std::io;
@@ -16,7 +16,7 @@ fn main() -> io::Result<()> {
     let file = File::open(file_path)?;
 
     // Parse the JSON document
-    match Document::parse::<RoaringUsageBuilder, _>(file) {
+    match Document::parse::<BitpackingUsageBuilder, _>(file) {
         Ok(document) => {
             // serializing it again to stdout
             document

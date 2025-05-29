@@ -38,6 +38,7 @@ impl Packed {
     fn heap_size(&self) -> usize {
         self.compressed.len() * std::mem::size_of::<u8>()
             + self.remainder.len() * std::mem::size_of::<u32>()
+            + self.block_infos.len() * std::mem::size_of::<BlockInfo>()
     }
 
     fn append(&mut self, value: u32) {

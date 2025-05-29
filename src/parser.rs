@@ -41,12 +41,18 @@ impl<B: UsageBuilder> Builder<B> {
     pub(crate) fn display_heap_sizes(&self) {
         let tree_heap_size = self.tree_builder.heap_size();
         let text_heap_size = self.text_builder.heap_size();
+        let numbers_heap_size = self.numbers.len() * std::mem::size_of::<f64>();
+        let booleans_heap_size = self.booleans.heap_size();
         println!(
-            "Tree heap size: {:>15} ({:>6} Mb), Text heap size: {:>15} ({:>6} Mb)",
+            "Tree: {:>15} ({:>6} Mb), Text: {:>15} ({:>6} Mb), Numbers: {:>15} ({:>6} Mb), Booleans: {:>15} ({:>6} Mb)",
             tree_heap_size,
-            tree_heap_size / 1_000_000,
+            tree_heap_size / (1024 * 1024),
             text_heap_size,
-            text_heap_size / 1_000_000
+            text_heap_size / (1024 * 1024),
+            numbers_heap_size,
+            numbers_heap_size / (1024 * 1024),
+            booleans_heap_size,
+            booleans_heap_size / (1024 * 1024)
         );
     }
 }
@@ -101,8 +107,9 @@ impl<R: Read, B: UsageBuilder> Parser<R, B> {
     fn parse_item(&mut self) -> Result<(), JsonParseError> {
         TICK_COUNTER.fetch_add(1, Ordering::Relaxed);
         if TICK_COUNTER.load(Ordering::Relaxed) % 1000000 == 0 {
-            self.builder.tree_builder.display_heap_sizes();
-            // self.builder.display_heap_sizes();
+            // self.builder.tree_builder.display_heap_sizes();
+
+            self.builder.display_heap_sizes();
         }
         match self.reader.peek()? {
             ValueType::Array => {
