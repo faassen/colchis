@@ -7,9 +7,9 @@ access to the JSON data.
 It also uses internal data structures that should make particular search
 operations very fast, but we haven't exposed them yet.
 
-This library is highly experimental. It MAY eventually become useful if you need
-to do a lot of in-memory queries on a massive multi-gigabyte JSON file, but we
-aren't there yet.
+This library is highly experimental and in an early stage. It MAY eventually
+become useful if you need to do a lot of in-memory queries on a massive
+multi-gigabyte JSON file, and you don't mind waiting a while for the initial parse, but we aren't there yet.
 
 Colchis does this by using [succinct data
 structures](https://blog.startifact.com/posts/succinct/): in particular a
