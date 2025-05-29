@@ -11,15 +11,16 @@ This library is highly experimental. It MAY eventually become useful if you need
 to do a lot of in-memory queries on a massive multi-gigabyte JSON file, but we
 aren't there yet.
 
-Colchis does this by using succinct data structures: in particular a balanced
-parenthesis tree to store tree structure information and Elias Fano coded sparse
-bitvectors to store node type information.
+Colchis does this by using [succinct data
+structures](https://blog.startifact.com/posts/succinct/): in particular a
+balanced parenthesis tree to store tree structure information and Elias Fano
+coded sparse bitvectors to store node type information.
 
 During parsing we try to take care we don't go much above the size of the
-original JSON file. We do this by bitpacking to compress integer node type
-position information. It needs to be uncompressed in the end to create sparse
-bitvectors, but this can be done per node type, so this shouldn't increase peak
-memory too much.
+original JSON file. We do this by compressing integer node type position
+information using bitpacking. It needs to be uncompressed in the end to create
+sparse bitvectors, but this can be done per node type, so this shouldn't
+increase peak memory too much.
 
 ## Why this name?
 
