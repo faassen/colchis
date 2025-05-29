@@ -2,6 +2,10 @@
 name = "colchis"
 version = "0.1.0"
 edition = "2024"
+authors = ["Martijn Faassen <faassen@startifact.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["succinct", "json"]
 
 [dependencies]
 ahash = "0.8.12"
