@@ -7,7 +7,9 @@ access to the JSON data.
 It also uses internal data structures that should make particular search
 operations very fast, but we haven't exposed them yet.
 
-This library is highly experimental.
+This library is highly experimental. It MAY eventually become useful if you need
+to do a lot of in-memory queries on a massive multi-gigabyte JSON file, but we
+aren't there yet.
 
 Colchis does this by using succinct data structures: in particular a balanced
 parenthesis tree to store tree structure information and Elias Fano coded sparse
@@ -27,3 +29,10 @@ memory too much.
 in a quest for the Golden Fleece.
 
 And JSON sounds like Jason.
+
+## Credits
+
+Paligo let me create [Xoz](https://github.com/Paligo/xoz), which uses the same
+approach for XML. Many of the ideas are based on the paper [Fast in-memory XPath
+search using compressed
+indexes](https://repositorio.uchile.cl/bitstream/handle/2250/133086/Fast-in-memory-XPath-search-using-compressed-indexes.pdf).
