@@ -14,27 +14,16 @@ pub struct EliasFanoUsageIndex {
 }
 
 impl EliasFanoUsageIndex {
-    pub(crate) fn new(builder: RoaringUsageBuilder) -> Self {
-        // TODO: drain the usage so we can throw away memory early?
-        let sparse_rs_vecs = builder
-            .usage
-            .into_iter()
-            .map(|bm| {
-                let positions = bm.into_iter().map(|i| i as u64).collect::<Vec<u64>>();
-                SparseRSVec::new(&positions, builder.len as u64)
-            })
-            .collect();
+    pub(crate) fn new(
+        sparse_rs_vecs: Vec<SparseRSVec>,
+        node_lookup: NodeLookup,
+        len: usize,
+    ) -> Self {
         Self {
             sparse_rs_vecs,
-            node_lookup: builder.node_lookup,
-            len: builder.len,
+            node_lookup,
+            len,
         }
-    }
-}
-
-impl From<RoaringUsageBuilder> for EliasFanoUsageIndex {
-    fn from(builder: RoaringUsageBuilder) -> Self {
-        Self::new(builder)
     }
 }
 

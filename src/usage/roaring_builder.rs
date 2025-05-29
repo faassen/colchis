@@ -1,4 +1,5 @@
 use roaring::RoaringBitmap;
+use vers_vecs::SparseRSVec;
 
 use crate::{info::NodeInfoId, lookup::NodeLookup};
 
@@ -56,6 +57,15 @@ impl UsageBuilder for RoaringUsageBuilder {
     }
 
     fn build(self) -> Self::Index {
-        EliasFanoUsageIndex::new(self)
+        // TODO: drain the usage so we can throw away memory early?
+        let sparse_rs_vecs = self
+            .usage
+            .into_iter()
+            .map(|bm| {
+                let positions = bm.into_iter().map(|i| i as u64).collect::<Vec<u64>>();
+                SparseRSVec::new(&positions, self.len as u64)
+            })
+            .collect();
+        Self::Index::new(sparse_rs_vecs, self.node_lookup, self.len)
     }
 }

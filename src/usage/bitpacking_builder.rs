@@ -1,4 +1,5 @@
 use bitpacking::{BitPacker, BitPacker4x};
+use vers_vecs::SparseRSVec;
 
 use crate::{info::NodeInfoId, lookup::NodeLookup};
 
@@ -96,40 +97,58 @@ impl Packed {
     }
 }
 
-pub struct BitpackingBuilder {
+pub struct BitpackingUsageBuilder {
     usage: Vec<Packed>,
     node_lookup: NodeLookup,
     len: usize,
 }
 
-// impl UsageBuilder for BitpackingBuilder {
-//     type Index = EliasFanoUsageIndex;
+impl UsageBuilder for BitpackingUsageBuilder {
+    type Index = EliasFanoUsageIndex;
 
-//     fn new() -> Self {
-//         Self {
-//             usage: Vec::new(),
-//             node_lookup: NodeLookup::new(),
-//             len: 0,
-//         }
-//     }
+    fn new() -> Self {
+        Self {
+            usage: Vec::new(),
+            node_lookup: NodeLookup::new(),
+            len: 0,
+        }
+    }
 
-//     fn heap_size(&self) -> usize {
-//         let usage_heap_size: usize = self.usage.iter().map(|packed| packed.heap_size()).sum();
-//         self.node_lookup.heap_size() + usage_heap_size
-//     }
+    fn heap_size(&self) -> usize {
+        let usage_heap_size: usize = self.usage.iter().map(|packed| packed.heap_size()).sum();
+        self.node_lookup.heap_size() + usage_heap_size
+    }
 
-//     fn node_lookup_mut(&mut self) -> &mut NodeLookup {
-//         &mut self.node_lookup
-//     }
+    fn node_lookup_mut(&mut self) -> &mut NodeLookup {
+        &mut self.node_lookup
+    }
 
-//     fn append(&mut self, node_info_id: NodeInfoId) {
-//         // get the positions for this node_info_id; make it an empty vec if it doesn't exist yet
-//         let i = node_info_id.id() as usize;
-//         if self.usage.len() <= i {
-//             self.usage.resize(i + 1, Packed::new());
-//         }
-//     }
-// }
+    fn append(&mut self, node_info_id: NodeInfoId) {
+        // get the positions for this node_info_id; make it an empty vec if it doesn't exist yet
+        let i = node_info_id.id() as usize;
+        if self.usage.len() <= i {
+            self.usage.resize(i + 1, Packed::new());
+        }
+        let positions = self.usage.get_mut(i).expect("Entry should be present");
+        positions.append(self.len as u32);
+        self.len += 1;
+    }
+
+    fn build(mut self) -> Self::Index {
+        let mut sparse_rs_vecs = Vec::with_capacity(self.node_lookup.len());
+        // drain usage so we can throw away memory early
+        for packed in self.usage.drain(..) {
+            let positions = packed
+                .decompressed()
+                .into_iter()
+                .map(|i| i as u64)
+                .collect::<Vec<_>>();
+            let sparse_rs_vec = SparseRSVec::new(&positions, self.len as u64);
+            sparse_rs_vecs.push(sparse_rs_vec);
+        }
+        Self::Index::new(sparse_rs_vecs, self.node_lookup, self.len)
+    }
+}
 
 #[cfg(test)]
 mod tests {

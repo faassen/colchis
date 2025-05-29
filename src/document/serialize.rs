@@ -19,13 +19,13 @@ impl<U: UsageIndex> Document<U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::usage::{RoaringUsageBuilder, UsageBuilder};
+    use crate::usage::{BitpackingUsageBuilder, RoaringUsageBuilder, UsageBuilder};
 
     use super::*;
 
     fn assert_round_trip(input: &str) {
         // parse document from a string
-        let doc = RoaringUsageBuilder::parse(input.as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse(input.as_bytes()).unwrap();
         // serialize to a string
         let mut output = Vec::new();
         doc.serialize(&mut output).unwrap();

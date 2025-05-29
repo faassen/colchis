@@ -106,48 +106,48 @@ impl<U: UsageIndex> Document<U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::usage::{RoaringUsageBuilder, UsageBuilder};
+    use crate::usage::{BitpackingUsageBuilder, UsageBuilder};
 
     use super::*;
 
     #[test]
     fn test_number_value() {
-        let doc = RoaringUsageBuilder::parse("42".as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse("42".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Number(42f64));
     }
 
     #[test]
     fn test_boolean_value_true() {
-        let doc = RoaringUsageBuilder::parse("true".as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse("true".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Boolean(true));
     }
 
     #[test]
     fn test_boolean_value_false() {
-        let doc = RoaringUsageBuilder::parse("false".as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse("false".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Boolean(false));
     }
 
     #[test]
     fn test_null_value() {
-        let doc = RoaringUsageBuilder::parse("null".as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse("null".as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::Null);
     }
 
     #[test]
     fn test_string_value() {
-        let doc = RoaringUsageBuilder::parse(r#""hello""#.as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse(r#""hello""#.as_bytes()).unwrap();
         let v = doc.root_value();
         assert_eq!(v, Value::String("hello"));
     }
 
     #[test]
     fn test_array() {
-        let doc = RoaringUsageBuilder::parse(r#"["a", "b", "c"]"#.as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse(r#"["a", "b", "c"]"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Array(array_value) = v {
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_nested_array() {
-        let doc = RoaringUsageBuilder::parse(r#"[1, [2, 3], 4]"#.as_bytes()).unwrap();
+        let doc = BitpackingUsageBuilder::parse(r#"[1, [2, 3], 4]"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Array(array_value) = v {
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn test_object() {
         let doc =
-            RoaringUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+            BitpackingUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn test_object_keys() {
         let doc =
-            RoaringUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+            BitpackingUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn test_object_values() {
         let doc =
-            RoaringUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+            BitpackingUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
 
         let v = doc.root_value();
 
@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn test_object_entries() {
         let doc =
-            RoaringUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
+            BitpackingUsageBuilder::parse(r#"{"key1": "value1", "key2": 42}"#.as_bytes()).unwrap();
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
