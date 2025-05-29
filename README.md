@@ -9,7 +9,8 @@ operations very fast, but we haven't exposed them yet.
 
 This library is highly experimental and in an early stage. It MAY eventually
 become useful if you need to do a lot of in-memory queries on a massive
-multi-gigabyte JSON file, and you don't mind waiting a while for the initial parse, but we aren't there yet.
+multi-gigabyte JSON file, and you don't mind waiting a while for the initial
+parse, but we aren't there yet.
 
 Colchis does this by using [succinct data
 structures](https://blog.startifact.com/posts/succinct/): in particular a
@@ -37,3 +38,5 @@ Paligo let me create [Xoz](https://github.com/Paligo/xoz), which uses the same
 approach for XML. Many of the ideas are based on the paper [Fast in-memory XPath
 search using compressed
 indexes](https://repositorio.uchile.cl/bitstream/handle/2250/133086/Fast-in-memory-XPath-search-using-compressed-indexes.pdf).
+
+Oh and to [Itamar](https://hachyderm.io/@itamarst) who accidentally [nerd-sniped](https://xkcd.com/356/) me.
