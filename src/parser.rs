@@ -94,8 +94,12 @@ impl<R: Read, B: UsageBuilder> Parser<R, B> {
 
     fn parse(mut self) -> Result<Document<B::Index>, JsonParseError> {
         self.parse_item()?;
-        let structure = Structure::<B::Index>::new(self.builder.tree_builder);
+        // build the text first, so we can throw away the text builder in the end
+        // while the position usage is still compressed, so that we can hopefully
+        // avoid a high peak
         let text_usage = self.builder.text_builder.build();
+        // now uncompress the position data
+        let structure = Structure::<B::Index>::new(self.builder.tree_builder);
         Ok(Document::new(
             structure,
             text_usage,

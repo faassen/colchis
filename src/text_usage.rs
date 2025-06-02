@@ -1,36 +1,53 @@
+use std::io::Write;
 use std::ops::Range;
 
+use flate2::write::{ZlibDecoder, ZlibEncoder};
 use vers_vecs::SparseRSVec;
 
 pub(crate) struct TextBuilder {
-    s: String,
+    encoded_string: ZlibEncoder<Vec<u8>>,
+    total: usize,
     positions: Vec<u64>,
 }
 
 impl TextBuilder {
     pub(crate) fn new() -> Self {
         Self {
-            s: String::new(),
+            encoded_string: ZlibEncoder::new(Vec::new(), flate2::Compression::fast()),
             positions: Vec::new(),
+            total: 0,
         }
     }
 
     pub(crate) fn heap_size(&self) -> usize {
-        self.s.len() + self.positions.len() * std::mem::size_of::<u64>()
+        self.encoded_string.total_out() as usize + self.positions.len() * std::mem::size_of::<u64>()
     }
 
     pub(crate) fn string_node(&mut self, text: &str) {
-        self.s.push_str(text);
+        let l = text.len();
+        self.encoded_string.write_all(text.as_bytes()).unwrap();
         // terminator $, the 0 byte
-        let position = self.s.len() as u64;
-        self.s.push('\0');
+        self.total += l;
+        let position = self.total as u64;
         self.positions.push(position);
+        self.encoded_string.write_all(b"\0").unwrap();
+        self.total += 1; // for the terminator
     }
 
     pub(crate) fn build(self) -> TextUsage {
+        let compressed = self
+            .encoded_string
+            .finish()
+            .expect("Failed to finish encoding");
+        let writer: Vec<u8> = Vec::new();
+        let mut decoder = ZlibDecoder::new(writer);
+        decoder.write_all(&compressed).unwrap();
+        let writer = decoder.finish().unwrap();
+        let s = String::from_utf8(writer).expect("Failed to decode zlib compressed string");
+        println!("Decompressed: {}", s);
         TextUsage {
-            sarray: SparseRSVec::new(&self.positions, self.s.len() as u64),
-            text: self.s,
+            sarray: SparseRSVec::new(&self.positions, self.total as u64),
+            text: s,
         }
     }
 }
