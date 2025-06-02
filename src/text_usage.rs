@@ -44,7 +44,6 @@ impl TextBuilder {
         decoder.write_all(&compressed).unwrap();
         let writer = decoder.finish().unwrap();
         let s = String::from_utf8(writer).expect("Failed to decode zlib compressed string");
-        println!("Decompressed: {}", s);
         TextUsage {
             sarray: SparseRSVec::new(&self.positions, self.total as u64),
             text: s,
