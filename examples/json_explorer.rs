@@ -20,8 +20,13 @@ fn main() -> io::Result<()> {
     match Document::parse::<BitpackingUsageBuilder, _>(&file) {
         Ok(document) => {
             // Display document information
+            let heap_size = document.heap_size();
             println!("\n===== JSON Document Analysis =====");
-            println!("Heap size: {} bytes", document.heap_size());
+            println!(
+                "Heap size: {} bytes ({:.4} mb)",
+                heap_size,
+                heap_size as f64 / (1024.0 * 1024.0)
+            );
         }
         Err(err) => {
             println!("Error parsing JSON: {:?}", err);
