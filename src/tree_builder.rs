@@ -1,6 +1,9 @@
 use vers_vecs::BitVec;
 
-use crate::{info::NodeType, usage::UsageBuilder};
+use crate::{
+    info::{NodeInfoId, NodeType},
+    usage::UsageBuilder,
+};
 
 pub(crate) struct TreeBuilder<T: UsageBuilder> {
     pub(crate) usage_builder: T,
@@ -39,6 +42,17 @@ impl<T: UsageBuilder> TreeBuilder<T> {
 
     pub(crate) fn close(&mut self, node_type: NodeType) {
         self.usage_builder.close(node_type);
+        self.parentheses.append(false);
+    }
+
+    pub(crate) fn open_field(&mut self, name: &str) -> NodeInfoId {
+        let close_field_id = self.usage_builder.open_field(name);
+        self.parentheses.append(true);
+        close_field_id
+    }
+
+    pub(crate) fn close_field(&mut self, close_field_id: NodeInfoId) {
+        self.usage_builder.close_field(close_field_id);
         self.parentheses.append(false);
     }
 }

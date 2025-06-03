@@ -131,12 +131,10 @@ impl<R: Read, B: UsageBuilder> Parser<R, B> {
                 self.reader.begin_object()?;
                 self.builder.tree_builder.open(NodeType::Object);
                 while self.reader.has_next()? {
-                    let key = self.reader.next_name_owned()?;
-                    let node_type = NodeType::Field(key);
-                    // TODO: we could do away with the clone if we used a cow perhaps
-                    self.builder.tree_builder.open(node_type.clone());
+                    let key = self.reader.next_name()?;
+                    let close_field_id = self.builder.tree_builder.open_field(key);
                     self.parse_item()?;
-                    self.builder.tree_builder.close(node_type);
+                    self.builder.tree_builder.close_field(close_field_id);
                 }
                 self.reader.end_object()?;
                 self.builder.tree_builder.close(NodeType::Object);

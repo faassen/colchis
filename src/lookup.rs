@@ -6,6 +6,7 @@ use crate::info::{self, NodeInfo, NodeInfoId, NodeType};
 pub struct NodeLookup {
     node_infos: Vec<NodeInfo>,
     node_info_lookup: HashMap<NodeInfo, NodeInfoId>,
+    field_info_lookup: HashMap<String, NodeInfoId>,
 }
 
 impl NodeLookup {
@@ -13,6 +14,7 @@ impl NodeLookup {
         let mut node_lookup = Self {
             node_infos: Vec::new(),
             node_info_lookup: HashMap::default(),
+            field_info_lookup: HashMap::default(),
         };
 
         // register the hardcoded node ids so we can skip using the
@@ -70,6 +72,29 @@ impl NodeLookup {
             return idx;
         }
         self.register_lookup(node_info)
+    }
+
+    // an extra fast path for fields, so we can avoid allocation of the string
+    // if we already have that field name registered
+    fn register_field(
+        &mut self,
+        name: &str,
+        make_node_info: impl Fn(&str) -> NodeInfo,
+    ) -> NodeInfoId {
+        if let Some(&idx) = self.field_info_lookup.get(name) {
+            return idx;
+        }
+        let node_info = make_node_info(name);
+        let idx = self.register_lookup(node_info);
+        self.field_info_lookup.insert(name.to_string(), idx);
+        idx
+    }
+
+    pub fn register_field_ids(&mut self, name: &str) -> (NodeInfoId, NodeInfoId) {
+        (
+            self.register_field(name, |n| NodeInfo::open(NodeType::Field(n.to_string()))),
+            self.register_field(name, |n| NodeInfo::close(NodeType::Field(n.to_string()))),
+        )
     }
 
     fn register_fast_path(&mut self, node_info: &NodeInfo) -> Option<NodeInfoId> {

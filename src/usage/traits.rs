@@ -24,10 +24,23 @@ pub trait UsageBuilder {
         self.append(node_info_id);
     }
 
+    // open a field with the given name; also register the close field and
+    // return the NodeInfoId for closing that field
+    fn open_field(&mut self, name: &str) -> NodeInfoId {
+        let (open_node_info_id, close_node_info_id) =
+            self.node_lookup_mut().register_field_ids(name);
+        self.append(open_node_info_id);
+        close_node_info_id
+    }
+
     fn close(&mut self, node_type: NodeType) {
         let node_info = NodeInfo::close(node_type);
         let node_info_id = self.node_lookup_mut().register(node_info);
         self.append(node_info_id);
+    }
+
+    fn close_field(&mut self, close_field_id: NodeInfoId) {
+        self.append(close_field_id);
     }
 
     fn append(&mut self, node_info_id: NodeInfoId);
