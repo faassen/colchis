@@ -4,8 +4,11 @@ use std::ops::Range;
 use flate2::write::{ZlibDecoder, ZlibEncoder};
 use vers_vecs::SparseRSVec;
 
+const BATCH_SIZE: usize = 1024 * 8;
+
 pub(crate) struct TextBuilder {
     encoded_string: ZlibEncoder<Vec<u8>>,
+    batch: Vec<u8>,
     total: usize,
     positions: Vec<u64>,
 }
@@ -14,6 +17,7 @@ impl TextBuilder {
     pub(crate) fn new() -> Self {
         Self {
             encoded_string: ZlibEncoder::new(Vec::new(), flate2::Compression::fast()),
+            batch: Vec::with_capacity(BATCH_SIZE),
             positions: Vec::new(),
             total: 0,
         }
@@ -25,16 +29,39 @@ impl TextBuilder {
 
     pub(crate) fn string_node(&mut self, text: &str) {
         let l = text.len();
-        self.encoded_string.write_all(text.as_bytes()).unwrap();
-        // terminator $, the 0 byte
+        let l_with_terminator = l + 1; // +1 for the terminator
+        if l_with_terminator >= BATCH_SIZE {
+            // if the text is larger than the batch size,
+            // we flush the batch
+            self.encoded_string.write_all(&self.batch).unwrap();
+            self.batch.clear();
+            // we write the text directory; no point in adding it to the batch
+            self.encoded_string.write_all(text.as_bytes()).unwrap();
+            // but we add the terminator to the batch
+            self.batch.push(0);
+        } else if self.batch.len() + l_with_terminator >= BATCH_SIZE {
+            // if the batch would become full, we flush it
+            self.encoded_string.write_all(&self.batch).unwrap();
+            self.batch.clear();
+            // and we add the text to the now-cleared batch
+            self.batch.extend_from_slice(text.as_bytes());
+            self.batch.push(0);
+        } else {
+            // otherwise we add it to the batch
+            self.batch.extend_from_slice(text.as_bytes());
+            self.batch.push(0);
+        }
         self.total += l;
         let position = self.total as u64;
         self.positions.push(position);
-        self.encoded_string.write_all(b"\0").unwrap();
         self.total += 1; // for the terminator
     }
 
-    pub(crate) fn build(self) -> TextUsage {
+    pub(crate) fn build(mut self) -> TextUsage {
+        // we need to flush the batch if it has any data left
+        if !self.batch.is_empty() {
+            self.encoded_string.write_all(&self.batch).unwrap();
+        }
         let compressed = self
             .encoded_string
             .finish()
