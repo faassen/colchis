@@ -4,6 +4,7 @@ mod info;
 mod lookup;
 mod parser;
 mod structure;
+pub mod text;
 mod text_usage;
 mod tree_builder;
 mod usage;
