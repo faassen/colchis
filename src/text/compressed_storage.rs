@@ -323,4 +323,286 @@ mod tests {
         assert_eq!(retrieved, "");
         assert_eq!(usage.stats().total_texts, 1);
     }
+
+    #[test]
+    fn test_string_exactly_at_block_size() {
+        let block_size = 20;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Create a string exactly 20 bytes long
+        let exact_size_text = "12345678901234567890"; // exactly 20 bytes
+        assert_eq!(exact_size_text.len(), block_size);
+        
+        let text_id = builder.add_string(exact_size_text);
+
+        let usage = builder.build();
+        let retrieved = usage.get_string(text_id);
+        assert_eq!(retrieved, exact_size_text);
+        assert_eq!(usage.stats().total_blocks, 1);
+        assert_eq!(usage.stats().total_texts, 1);
+    }
+
+    #[test]
+    fn test_string_exactly_fills_remaining_space() {
+        let block_size = 20;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Add a string that partially fills the block
+        let first_text = "Hello"; // 5 bytes
+        let id1 = builder.add_string(first_text);
+        
+        // Add a string that exactly fills the remaining 15 bytes
+        let second_text = "123456789012345"; // exactly 15 bytes
+        assert_eq!(second_text.len(), 15);
+        let id2 = builder.add_string(second_text);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), first_text);
+        assert_eq!(usage.get_string(id2), second_text);
+        assert_eq!(usage.stats().total_blocks, 1); // Should fit in one block
+        assert_eq!(usage.stats().total_texts, 2);
+    }
+
+    #[test]
+    fn test_string_one_byte_over_block_size() {
+        let block_size = 20;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Add a string that partially fills the block
+        let first_text = "Hello"; // 5 bytes
+        let id1 = builder.add_string(first_text);
+        
+        // Add a string that would exceed block by 1 byte (16 bytes, but only 15 remaining)
+        let second_text = "1234567890123456"; // 16 bytes
+        assert_eq!(second_text.len(), 16);
+        let id2 = builder.add_string(second_text);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), first_text);
+        assert_eq!(usage.get_string(id2), second_text);
+        assert_eq!(usage.stats().total_blocks, 2); // Should create two blocks
+        assert_eq!(usage.stats().total_texts, 2);
+    }
+
+    #[test]
+    fn test_massive_string_far_exceeding_block_size() {
+        let block_size = 10;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Create a string that's 10x the block size
+        let massive_text = "A".repeat(100); // 100 bytes, 10x block size
+        let text_id = builder.add_string(&massive_text);
+
+        let usage = builder.build();
+        let retrieved = usage.get_string(text_id);
+        assert_eq!(retrieved, massive_text);
+        assert_eq!(usage.stats().total_blocks, 1); // Still one block, just large
+        assert_eq!(usage.stats().total_texts, 1);
+    }
+
+    #[test]
+    fn test_multiple_strings_cumulative_exact_block_size() {
+        let block_size = 20;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Add strings that together sum to exactly block_size
+        let text1 = "12345"; // 5 bytes
+        let text2 = "67890"; // 5 bytes  
+        let text3 = "ABCDEFGHIJ"; // 10 bytes
+        // Total: 20 bytes exactly
+        
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.stats().total_blocks, 1);
+        assert_eq!(usage.stats().total_texts, 3);
+    }
+
+    #[test]
+    fn test_sequential_block_boundary_crossings() {
+        let block_size = 10;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Each string will force a new block
+        let texts = vec![
+            "1234567890A", // 11 bytes - exceeds block
+            "BCDEFGHIJK",  // 10 bytes - exactly block size
+            "LMNOPQRSTU",  // 10 bytes - exactly block size
+        ];
+        
+        let mut text_ids = Vec::new();
+        for text in &texts {
+            text_ids.push(builder.add_string(text));
+        }
+
+        let usage = builder.build();
+        
+        for (i, text_id) in text_ids.iter().enumerate() {
+            assert_eq!(usage.get_string(*text_id), texts[i]);
+        }
+        assert_eq!(usage.stats().total_blocks, 3); // Each string in its own block
+        assert_eq!(usage.stats().total_texts, 3);
+    }
+
+    #[test]
+    fn test_empty_string_at_block_boundary() {
+        let block_size = 10;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Fill block exactly
+        let full_text = "1234567890"; // exactly 10 bytes
+        let id1 = builder.add_string(full_text);
+        
+        // Add empty string - should go to new block
+        let id2 = builder.add_string("");
+        
+        // Add another string to same block as empty string
+        let next_text = "Hello";
+        let id3 = builder.add_string(next_text);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), full_text);
+        assert_eq!(usage.get_string(id2), "");
+        assert_eq!(usage.get_string(id3), next_text);
+        assert_eq!(usage.stats().total_blocks, 2);
+        assert_eq!(usage.stats().total_texts, 3);
+    }
+
+    #[test]
+    fn test_zero_size_block_limit() {
+        // Edge case: what happens with block_size of 0?
+        // This should still work - every string gets its own block
+        let mut builder = TextUsageBuilder::new(0, 5);
+
+        let text1 = "A";
+        let text2 = "B";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.stats().total_blocks, 2); // Each string in its own block
+        assert_eq!(usage.stats().total_texts, 2);
+    }
+
+    #[test]
+    fn test_alternating_exact_and_overflow() {
+        let block_size = 10;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Pattern: exact fit, then overflow, repeat
+        let exact_fit = "1234567890"; // exactly 10 bytes
+        let overflow = "12345678901"; // 11 bytes
+        
+        let id1 = builder.add_string(exact_fit);  // Block 1: exactly fits
+        let id2 = builder.add_string(overflow);   // Block 2: overflows  
+        let id3 = builder.add_string(exact_fit);  // Block 3: exactly fits
+        let id4 = builder.add_string(overflow);   // Block 4: overflows
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), exact_fit);
+        assert_eq!(usage.get_string(id2), overflow);
+        assert_eq!(usage.get_string(id3), exact_fit);
+        assert_eq!(usage.get_string(id4), overflow);
+        assert_eq!(usage.stats().total_blocks, 4);
+        assert_eq!(usage.stats().total_texts, 4);
+    }
+
+    #[test]
+    fn test_multiple_empty_strings_at_boundaries() {
+        let block_size = 5;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Fill first block exactly
+        let text1 = "12345"; // exactly 5 bytes
+        let id1 = builder.add_string(text1);
+        
+        // Add multiple empty strings - should all go to next block
+        let id2 = builder.add_string("");
+        let id3 = builder.add_string(""); 
+        let id4 = builder.add_string("");
+        
+        // Add regular string to same block
+        let text2 = "ABC";
+        let id5 = builder.add_string(text2);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id2), "");
+        assert_eq!(usage.get_string(id3), "");
+        assert_eq!(usage.get_string(id4), "");
+        assert_eq!(usage.get_string(id5), text2);
+        assert_eq!(usage.stats().total_blocks, 2);
+        assert_eq!(usage.stats().total_texts, 5);
+    }
+
+    #[test]
+    fn test_single_byte_strings_at_boundary() {
+        let block_size = 5;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Add exactly 5 single-byte strings to fill one block
+        let id1 = builder.add_string("A");
+        let id2 = builder.add_string("B");
+        let id3 = builder.add_string("C");
+        let id4 = builder.add_string("D");
+        let id5 = builder.add_string("E");
+        
+        // Next string should go to new block
+        let id6 = builder.add_string("F");
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), "A");
+        assert_eq!(usage.get_string(id2), "B");
+        assert_eq!(usage.get_string(id3), "C");
+        assert_eq!(usage.get_string(id4), "D");
+        assert_eq!(usage.get_string(id5), "E");
+        assert_eq!(usage.get_string(id6), "F");
+        assert_eq!(usage.stats().total_blocks, 2);
+        assert_eq!(usage.stats().total_texts, 6);
+    }
+
+    #[test]
+    fn test_block_size_one_byte() {
+        // Extreme case: block size of 1 byte
+        let mut builder = TextUsageBuilder::new(1, 5);
+
+        let id1 = builder.add_string("A");  // 1 byte - fills block
+        let id2 = builder.add_string("B");  // 1 byte - new block
+        let id3 = builder.add_string("AB"); // 2 bytes - new block (exceeds)
+        let id4 = builder.add_string("");   // 0 bytes - new block
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), "A");
+        assert_eq!(usage.get_string(id2), "B");
+        assert_eq!(usage.get_string(id3), "AB");
+        assert_eq!(usage.get_string(id4), "");
+        assert_eq!(usage.stats().total_blocks, 4);
+        assert_eq!(usage.stats().total_texts, 4);
+    }
+
+    #[test]
+    fn test_repeated_exact_block_fills() {
+        let block_size = 10;
+        let mut builder = TextUsageBuilder::new(block_size, 5);
+
+        // Each string exactly fills a block
+        let exact_text = "1234567890"; // exactly 10 bytes
+        let id1 = builder.add_string(exact_text);
+        let id2 = builder.add_string(exact_text);
+        let id3 = builder.add_string(exact_text);
+
+        let usage = builder.build();
+        assert_eq!(usage.get_string(id1), exact_text);
+        assert_eq!(usage.get_string(id2), exact_text);
+        assert_eq!(usage.get_string(id3), exact_text);
+        assert_eq!(usage.stats().total_blocks, 3); // Each in its own block
+        assert_eq!(usage.stats().total_texts, 3);
+    }
 }
