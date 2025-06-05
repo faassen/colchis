@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
+use std::num::NonZeroUsize;
 
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
@@ -153,14 +154,18 @@ pub struct TextUsage {
     blocks: Vec<Block>,
     text_infos: Vec<TextInfo>,
     cache: RefCell<LruCache<BlockId, Vec<u8>>>,
+    cache_capacity: usize,
 }
 
 impl TextUsage {
     fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
+        // LruCache requires NonZeroUsize, so we use 1 as minimum capacity
+        let capacity = NonZeroUsize::new(cache_capacity.max(1)).unwrap();
         Self {
             blocks,
             text_infos,
-            cache: RefCell::new(LruCache::new(cache_capacity.try_into().unwrap())),
+            cache: RefCell::new(LruCache::new(capacity)),
+            cache_capacity,
         }
     }
 
@@ -174,6 +179,17 @@ impl TextUsage {
     /// Retrieve a string by its TextId
     pub fn get_string(&self, text_id: TextId) -> String {
         let text_info = self.text_infos.get(text_id.0).expect("TextId should exist");
+
+        // If cache capacity is 0, skip caching entirely
+        if self.cache_capacity == 0 {
+            let block = self
+                .blocks
+                .get(text_info.block_id.as_index())
+                .expect("Compressed block should exist");
+            let block_data = block.decompress();
+            return Self::string_data(text_info, &block_data);
+        }
+
         // first look for block in LRU cache
         let mut cache = self.cache.borrow_mut();
         let block_data = cache.get(&text_info.block_id);
@@ -217,7 +233,11 @@ impl TextUsage {
             } else {
                 0.0
             },
-            cache_size: self.cache.borrow().len(),
+            cache_size: if self.cache_capacity == 0 {
+                0
+            } else {
+                self.cache.borrow().len()
+            },
         }
     }
 }
@@ -332,7 +352,7 @@ mod tests {
         // Create a string exactly 20 bytes long
         let exact_size_text = "12345678901234567890"; // exactly 20 bytes
         assert_eq!(exact_size_text.len(), block_size);
-        
+
         let text_id = builder.add_string(exact_size_text);
 
         let usage = builder.build();
@@ -350,7 +370,7 @@ mod tests {
         // Add a string that partially fills the block
         let first_text = "Hello"; // 5 bytes
         let id1 = builder.add_string(first_text);
-        
+
         // Add a string that exactly fills the remaining 15 bytes
         let second_text = "123456789012345"; // exactly 15 bytes
         assert_eq!(second_text.len(), 15);
@@ -371,7 +391,7 @@ mod tests {
         // Add a string that partially fills the block
         let first_text = "Hello"; // 5 bytes
         let id1 = builder.add_string(first_text);
-        
+
         // Add a string that would exceed block by 1 byte (16 bytes, but only 15 remaining)
         let second_text = "1234567890123456"; // 16 bytes
         assert_eq!(second_text.len(), 16);
@@ -407,10 +427,10 @@ mod tests {
 
         // Add strings that together sum to exactly block_size
         let text1 = "12345"; // 5 bytes
-        let text2 = "67890"; // 5 bytes  
+        let text2 = "67890"; // 5 bytes
         let text3 = "ABCDEFGHIJ"; // 10 bytes
         // Total: 20 bytes exactly
-        
+
         let id1 = builder.add_string(text1);
         let id2 = builder.add_string(text2);
         let id3 = builder.add_string(text3);
@@ -434,14 +454,14 @@ mod tests {
             "BCDEFGHIJK",  // 10 bytes - exactly block size
             "LMNOPQRSTU",  // 10 bytes - exactly block size
         ];
-        
+
         let mut text_ids = Vec::new();
         for text in &texts {
             text_ids.push(builder.add_string(text));
         }
 
         let usage = builder.build();
-        
+
         for (i, text_id) in text_ids.iter().enumerate() {
             assert_eq!(usage.get_string(*text_id), texts[i]);
         }
@@ -457,10 +477,10 @@ mod tests {
         // Fill block exactly
         let full_text = "1234567890"; // exactly 10 bytes
         let id1 = builder.add_string(full_text);
-        
+
         // Add empty string - should go to new block
         let id2 = builder.add_string("");
-        
+
         // Add another string to same block as empty string
         let next_text = "Hello";
         let id3 = builder.add_string(next_text);
@@ -499,11 +519,11 @@ mod tests {
         // Pattern: exact fit, then overflow, repeat
         let exact_fit = "1234567890"; // exactly 10 bytes
         let overflow = "12345678901"; // 11 bytes
-        
-        let id1 = builder.add_string(exact_fit);  // Block 1: exactly fits
-        let id2 = builder.add_string(overflow);   // Block 2: overflows  
-        let id3 = builder.add_string(exact_fit);  // Block 3: exactly fits
-        let id4 = builder.add_string(overflow);   // Block 4: overflows
+
+        let id1 = builder.add_string(exact_fit); // Block 1: exactly fits
+        let id2 = builder.add_string(overflow); // Block 2: overflows
+        let id3 = builder.add_string(exact_fit); // Block 3: exactly fits
+        let id4 = builder.add_string(overflow); // Block 4: overflows
 
         let usage = builder.build();
         assert_eq!(usage.get_string(id1), exact_fit);
@@ -522,12 +542,12 @@ mod tests {
         // Fill first block exactly
         let text1 = "12345"; // exactly 5 bytes
         let id1 = builder.add_string(text1);
-        
+
         // Add multiple empty strings - should all go to next block
         let id2 = builder.add_string("");
-        let id3 = builder.add_string(""); 
+        let id3 = builder.add_string("");
         let id4 = builder.add_string("");
-        
+
         // Add regular string to same block
         let text2 = "ABC";
         let id5 = builder.add_string(text2);
@@ -553,7 +573,7 @@ mod tests {
         let id3 = builder.add_string("C");
         let id4 = builder.add_string("D");
         let id5 = builder.add_string("E");
-        
+
         // Next string should go to new block
         let id6 = builder.add_string("F");
 
@@ -573,10 +593,10 @@ mod tests {
         // Extreme case: block size of 1 byte
         let mut builder = TextUsageBuilder::new(1, 5);
 
-        let id1 = builder.add_string("A");  // 1 byte - fills block
-        let id2 = builder.add_string("B");  // 1 byte - new block
+        let id1 = builder.add_string("A"); // 1 byte - fills block
+        let id2 = builder.add_string("B"); // 1 byte - new block
         let id3 = builder.add_string("AB"); // 2 bytes - new block (exceeds)
-        let id4 = builder.add_string("");   // 0 bytes - new block
+        let id4 = builder.add_string(""); // 0 bytes - new block
 
         let usage = builder.build();
         assert_eq!(usage.get_string(id1), "A");
@@ -604,5 +624,253 @@ mod tests {
         assert_eq!(usage.get_string(id3), exact_text);
         assert_eq!(usage.stats().total_blocks, 3); // Each in its own block
         assert_eq!(usage.stats().total_texts, 3);
+    }
+
+    #[test]
+    fn test_cache_eviction_with_small_capacity() {
+        let block_size = 10;
+        let cache_capacity = 2; // Small cache that will cause eviction
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        // Create 4 blocks, but cache can only hold 2
+        let text1 = "Block1Text"; // 10 bytes - Block 1
+        let text2 = "Block2Text"; // 10 bytes - Block 2
+        let text3 = "Block3Text"; // 10 bytes - Block 3
+        let text4 = "Block4Text"; // 10 bytes - Block 4
+
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+        let id4 = builder.add_string(text4);
+
+        let usage = builder.build();
+
+        // Access all strings - should cause cache eviction
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block2]
+        assert_eq!(usage.stats().cache_size, 2);
+
+        assert_eq!(usage.get_string(id3), text3); // Cache: [Block2, Block3] (Block1 evicted)
+        assert_eq!(usage.stats().cache_size, 2);
+
+        assert_eq!(usage.get_string(id4), text4); // Cache: [Block3, Block4] (Block2 evicted)
+        assert_eq!(usage.stats().cache_size, 2);
+
+        // Access Block1 again - should require decompression
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block4, Block1] (Block3 evicted)
+        assert_eq!(usage.stats().cache_size, 2);
+    }
+
+    #[test]
+    fn test_zero_cache_capacity() {
+        let block_size = 10;
+        let cache_capacity = 0; // No caching
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        let text1 = "Block1Text";
+        let text2 = "Block2Text";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+
+        let usage = builder.build();
+
+        // Every access should decompress fresh (no caching)
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.stats().cache_size, 0);
+
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.stats().cache_size, 0);
+
+        // Access again - still no caching
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.stats().cache_size, 0);
+    }
+
+    #[test]
+    fn test_cache_thrashing_alternating_access() {
+        let block_size = 10;
+        let cache_capacity = 1; // Only 1 block can be cached
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        let text1 = "Block1Text";
+        let text2 = "Block2Text";
+        let text3 = "Block3Text";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+
+        let usage = builder.build();
+
+        // Alternating access pattern that causes constant eviction
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(id2), text2); // Cache: [Block2] (Block1 evicted)
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1] (Block2 evicted)
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(id3), text3); // Cache: [Block3] (Block1 evicted)
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(id2), text2); // Cache: [Block2] (Block3 evicted)
+        assert_eq!(usage.stats().cache_size, 1);
+    }
+
+    #[test]
+    fn test_cache_hit_same_block_multiple_strings() {
+        let block_size = 50;
+        let cache_capacity = 2;
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        // Multiple strings in same block
+        let text1 = "First";
+        let text2 = "Second";
+        let text3 = "Third";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+
+        let usage = builder.build();
+        assert_eq!(usage.stats().total_blocks, 1); // All in same block
+
+        // First access loads block into cache
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.stats().cache_size, 1);
+
+        // Subsequent accesses to same block should be cache hits
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.stats().cache_size, 1); // Still same block
+
+        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.stats().cache_size, 1); // Still same block
+    }
+
+    #[test]
+    fn test_cache_with_repeated_string_access() {
+        let block_size = 10;
+        let cache_capacity = 2;
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        let text1 = "Block1Text";
+        let text2 = "Block2Text";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+
+        let usage = builder.build();
+
+        // Access same string multiple times
+        for _ in 0..5 {
+            assert_eq!(usage.get_string(id1), text1);
+        }
+        assert_eq!(usage.stats().cache_size, 1);
+
+        // Access second string
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.stats().cache_size, 2);
+
+        // Access first string again - should be cache hit
+        for _ in 0..3 {
+            assert_eq!(usage.get_string(id1), text1);
+        }
+        assert_eq!(usage.stats().cache_size, 2);
+    }
+
+    #[test]
+    fn test_cache_capacity_larger_than_blocks() {
+        let block_size = 10;
+        let cache_capacity = 10; // Much larger than number of blocks
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        let text1 = "Block1Text";
+        let text2 = "Block2Text";
+        let text3 = "Block3Text";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+
+        let usage = builder.build();
+        assert_eq!(usage.stats().total_blocks, 3);
+
+        // Access all blocks - should all fit in cache
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.stats().cache_size, 3);
+
+        // Access in any order - should all be cache hits
+        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.stats().cache_size, 3); // No eviction
+    }
+
+    #[test]
+    fn test_cache_with_empty_strings() {
+        let block_size = 10;
+        let cache_capacity = 2;
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        let text1 = "Block1Text";
+        let empty_id1 = builder.add_string(""); // Empty string in block 2
+        let empty_id2 = builder.add_string(""); // Another empty string in block 2
+        let text2 = "Block2Text"; // Regular text in block 2
+        let text2_id = builder.add_string(text2); // This will be in block 2
+        let id1 = builder.add_string(text1); // This will be in block 3
+
+        let usage = builder.build();
+
+        // Access strings from different blocks
+        assert_eq!(usage.get_string(id1), text1); // Block 3
+        assert_eq!(usage.stats().cache_size, 1);
+
+        assert_eq!(usage.get_string(empty_id1), ""); // Block 2
+        assert_eq!(usage.stats().cache_size, 2);
+
+        assert_eq!(usage.get_string(empty_id2), ""); // Block 2 (cache hit)
+        assert_eq!(usage.stats().cache_size, 2);
+
+        assert_eq!(usage.get_string(text2_id), text2); // Block 2 (cache hit)
+        assert_eq!(usage.stats().cache_size, 2);
+    }
+
+    #[test]
+    fn test_cache_lru_ordering() {
+        let block_size = 10;
+        let cache_capacity = 3;
+        let mut builder = TextUsageBuilder::new(block_size, cache_capacity);
+
+        // Create 4 blocks
+        let text1 = "Block1Text";
+        let text2 = "Block2Text";
+        let text3 = "Block3Text";
+        let text4 = "Block4Text";
+        let id1 = builder.add_string(text1);
+        let id2 = builder.add_string(text2);
+        let id3 = builder.add_string(text3);
+        let id4 = builder.add_string(text4);
+
+        let usage = builder.build();
+
+        // Load first 3 blocks into cache
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
+        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block2]
+        assert_eq!(usage.get_string(id3), text3); // Cache: [Block1, Block2, Block3]
+        assert_eq!(usage.stats().cache_size, 3);
+
+        // Access Block1 again to make it most recently used
+        assert_eq!(usage.get_string(id1), text1); // Cache: [Block2, Block3, Block1]
+        assert_eq!(usage.stats().cache_size, 3);
+
+        // Add Block4 - should evict Block2 (least recently used)
+        assert_eq!(usage.get_string(id4), text4); // Cache: [Block3, Block1, Block4]
+        assert_eq!(usage.stats().cache_size, 3);
+
+        // Access Block2 again - should require decompression
+        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block4, Block2]
+        assert_eq!(usage.stats().cache_size, 3);
     }
 }
