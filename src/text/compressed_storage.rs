@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
-use std::ops::Range;
+use std::ops::{Range, RangeFull};
 use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt};
@@ -44,10 +44,14 @@ struct TextInfo {
 struct Block {
     compressed_data: Vec<u8>,
     original_size: usize,
+    // the start text id for this block
+    start_text_id: TextId,
+    // the ranges of text ids in this block
+    ranges: Vec<Range<usize>>,
 }
 
 impl Block {
-    fn compress(data: &[u8]) -> Self {
+    fn compress(start_text_id: TextId, ranges: Vec<Range<usize>>, data: &[u8]) -> Self {
         let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
         encoder
             .write_all(data)
@@ -59,6 +63,8 @@ impl Block {
         Block {
             compressed_data,
             original_size: data.len(),
+            start_text_id,
+            ranges,
         }
     }
 
@@ -75,7 +81,7 @@ pub struct TextUsageBuilder {
     block_size: usize,
     cache_capacity: usize,
     current_block_buffer: Vec<u8>,
-    current_block_texts: Vec<(usize, usize)>,
+    current_block_texts: Vec<Range<usize>>,
     blocks: Vec<Block>,
     text_infos: Vec<TextInfo>,
 }
@@ -112,7 +118,8 @@ impl TextUsageBuilder {
         self.current_block_buffer.extend_from_slice(text_bytes);
 
         // track that we've added this text to the current block
-        self.current_block_texts.push((start, text_bytes.len()));
+        self.current_block_texts
+            .push(start..start + text_bytes.len());
 
         text_id
     }
@@ -126,15 +133,20 @@ impl TextUsageBuilder {
         let block_id = BlockId::new(self.blocks.len());
 
         // Now we need to create a text info for each text in this block
-        for (start, length) in &self.current_block_texts {
+        let start_text_id = TextId::new(self.text_infos.len());
+        for range in &self.current_block_texts {
             let text_info = TextInfo {
                 block_id,
-                range: *start..(*start + *length),
+                range: range.clone(),
             };
             self.text_infos.push(text_info);
         }
         // Create compressed block
-        let block = Block::compress(&self.current_block_buffer);
+        let block = Block::compress(
+            start_text_id,
+            self.current_block_texts.clone(),
+            &self.current_block_buffer,
+        );
 
         self.blocks.push(block);
 
@@ -154,39 +166,17 @@ impl TextUsageBuilder {
 pub struct TextUsage {
     blocks: Vec<Block>,
     text_infos: Vec<TextInfo>,
-    // a more convenient way to access text info information per-block
-    block_infos: HashMap<BlockId, BlockInfo>,
     cache: RefCell<LruCache<BlockId, Arc<[Arc<str>]>>>,
     cache_capacity: usize,
-}
-
-struct BlockInfo {
-    start_text_id: TextId,
-    ranges: Vec<Range<usize>>,
 }
 
 impl TextUsage {
     fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
         // LruCache requires NonZeroUsize, so we use 1 as minimum capacity
         let capacity = NonZeroUsize::new(cache_capacity.max(1)).unwrap();
-        // construct block infos as a more convenient way to access
-        // which text ranges belong to which block
-        let mut block_infos = HashMap::new();
-        for (i, text_info) in text_infos.iter().enumerate() {
-            let block_id = text_info.block_id;
-            // we create a new block info if we have a new block, marking
-            // the starting text id for this block
-            let entry = block_infos.entry(block_id).or_insert_with(|| BlockInfo {
-                start_text_id: TextId::new(i),
-                ranges: Vec::new(),
-            });
-            // we keep all ranges per block
-            entry.ranges.push(text_info.range.clone());
-        }
         Self {
             blocks,
             text_infos,
-            block_infos,
             cache: RefCell::new(LruCache::new(capacity)),
             cache_capacity,
         }
@@ -201,11 +191,11 @@ impl TextUsage {
 
     // extract all strings from the block data
     fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> Vec<Arc<str>> {
-        let block_info = self
-            .block_infos
-            .get(&block_id)
+        let block = self
+            .blocks
+            .get(block_id.as_index())
             .expect("BlockId should exist");
-        block_info
+        block
             .ranges
             .iter()
             .map(|range| {
@@ -221,6 +211,11 @@ impl TextUsage {
     pub fn get_string(&self, text_id: TextId) -> Arc<str> {
         let text_info = self.text_infos.get(text_id.0).expect("TextId should exist");
 
+        let block = self
+            .blocks
+            .get(text_info.block_id.as_index())
+            .expect("Block should exist");
+
         let block_slices = {
             if self.cache_capacity > 0 {
                 let mut cache = self.cache.borrow_mut();
@@ -228,10 +223,6 @@ impl TextUsage {
                     cached.clone()
                 } else {
                     // Decompress and cache
-                    let block = self
-                        .blocks
-                        .get(text_info.block_id.as_index())
-                        .expect("Block should exist");
                     let block_data = block.decompress();
                     let block_slices: Arc<[Arc<str>]> =
                         Arc::from(self.block_slices(text_info.block_id, block_data));
@@ -239,21 +230,12 @@ impl TextUsage {
                     block_slices
                 }
             } else {
-                let block = self
-                    .blocks
-                    .get(text_info.block_id.as_index())
-                    .expect("Block should exist");
                 let block_data = block.decompress();
                 Arc::from(self.block_slices(text_info.block_id, block_data))
             }
         };
 
-        // TODO: get start from block itself
-        let block_info = self
-            .block_infos
-            .get(&text_info.block_id)
-            .expect("BlockId should exist");
-        let offset = text_id.0 - block_info.start_text_id.0;
+        let offset = text_id.0 - block.start_text_id.0;
         block_slices[offset].clone()
     }
 
