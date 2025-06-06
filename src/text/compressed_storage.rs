@@ -67,6 +67,19 @@ impl Block {
         decoder.read_to_end(&mut decompressed).unwrap();
         decompressed
     }
+
+    fn block_slices(&self) -> Arc<[Arc<str>]> {
+        let block_data = self.decompress();
+        self.ranges
+            .iter()
+            .map(|range| {
+                // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8
+                let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
+                // this is not zero-copy but we'll accept that
+                Arc::from(s)
+            })
+            .collect()
+    }
 }
 
 /// Builder for creating compressed string storage
@@ -171,24 +184,6 @@ impl TextUsage {
         }
     }
 
-    // extract all strings from the block data
-    fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> Vec<Arc<str>> {
-        let block = self
-            .blocks
-            .get(block_id.as_index())
-            .expect("BlockId should exist");
-        block
-            .ranges
-            .iter()
-            .map(|range| {
-                // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8
-                let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
-                // this is not zero-copy but we'll accept that
-                Arc::from(s)
-            })
-            .collect()
-    }
-
     /// Retrieve a string by its TextId
     pub fn get_string(&self, text_id: TextId) -> Arc<str> {
         let block_id = self.texts.get(text_id.0).expect("TextId should exist");
@@ -205,15 +200,12 @@ impl TextUsage {
                     cached.clone()
                 } else {
                     // Decompress and cache
-                    let block_data = block.decompress();
-                    let block_slices: Arc<[Arc<str>]> =
-                        Arc::from(self.block_slices(*block_id, block_data));
+                    let block_slices = block.block_slices();
                     cache.put(*block_id, block_slices.clone());
                     block_slices
                 }
             } else {
-                let block_data = block.decompress();
-                Arc::from(self.block_slices(*block_id, block_data))
+                block.block_slices()
             }
         };
 
