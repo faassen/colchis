@@ -181,13 +181,6 @@ impl TextUsage {
         }
     }
 
-    fn string_data(text_info: &TextInfo, block_data: &[u8]) -> String {
-        let text_bytes = &block_data[text_info.range.clone()];
-        // TODO: could do an unchecked conversion here as we should be sure
-        // it's valid UTF-8
-        String::from_utf8_lossy(text_bytes).into_owned()
-    }
-
     // extract all strings from the block data
     fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> Vec<Arc<str>> {
         let block = self
