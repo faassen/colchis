@@ -17,3 +17,4 @@ struson = "0.6.0"
 vers-vecs = "1.6.3"
 tikv-jemallocator = "0.6.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["stats"] }
+yoke = { version = "0.8.0", features = ["derive"] }

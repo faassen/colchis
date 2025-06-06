@@ -1,13 +1,17 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
 use std::ops::Range;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt};
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use lru::LruCache;
+use yoke::{Yoke, Yokeable};
 
 /// Unique identifier for stored text
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -164,6 +168,13 @@ struct BlockInfo {
     ranges: Vec<Range<usize>>,
 }
 
+#[derive(Yokeable, Clone)]
+struct BlockSlices<'a> {
+    slices: Vec<&'a str>,
+}
+
+type YokedBlockSlices = Yoke<BlockSlices<'static>, Arc<[u8]>>;
+
 impl TextUsage {
     fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
         // LruCache requires NonZeroUsize, so we use 1 as minimum capacity
@@ -198,6 +209,31 @@ impl TextUsage {
         String::from_utf8_lossy(text_bytes).into_owned()
     }
 
+    // a zero copy way to extract all strings from the block data
+    fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> YokedBlockSlices {
+        let block_info = self
+            .block_infos
+            .get(&block_id)
+            .expect("BlockId should exist");
+        // turn block_data into an Arc; this ought to avoid copying as the vec is
+        // at capacity
+        let block_data: Arc<[u8]> = Arc::from(block_data);
+        Yoke::<BlockSlices<'static>, Arc<[u8]>>::attach_to_cart(
+            block_data,
+            |block_data: &[u8]| {
+                let mut slices = Vec::with_capacity(block_info.ranges.len());
+
+                for range in &block_info.ranges {
+                    // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8,
+                    // and because we yoke the slices to the block data, we ensure that the lifetime is valid.
+                    let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
+                    slices.push(s);
+                }
+                BlockSlices { slices }
+            },
+        )
+    }
+
     /// Retrieve a string by its TextId
     pub fn get_string(&self, text_id: TextId) -> String {
         let text_info = self.text_infos.get(text_id.0).expect("TextId should exist");
@@ -215,8 +251,8 @@ impl TextUsage {
         // first look for block in LRU cache
         let mut cache = self.cache.borrow_mut();
         let block_data = cache.get(&text_info.block_id);
-        if let Some(uncompressed_data) = block_data {
-            return Self::string_data(text_info, uncompressed_data);
+        if let Some(block_data) = block_data {
+            return Self::string_data(text_info, block_data);
         }
 
         // okay it was not in the cache, so we need to decompress the block
