@@ -36,7 +36,6 @@ impl BlockId {
 #[derive(Debug, Clone)]
 struct TextInfo {
     block_id: BlockId,
-    range: Range<usize>,
 }
 
 #[derive(Debug)]
@@ -133,11 +132,8 @@ impl TextUsageBuilder {
 
         // Now we need to create a text info for each text in this block
         let start_text_id = TextId::new(self.text_infos.len());
-        for range in &self.current_block_texts {
-            let text_info = TextInfo {
-                block_id,
-                range: range.clone(),
-            };
+        for _ in &self.current_block_texts {
+            let text_info = TextInfo { block_id };
             self.text_infos.push(text_info);
         }
         // Create compressed block
