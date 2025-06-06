@@ -33,11 +33,6 @@ impl BlockId {
     }
 }
 
-#[derive(Debug, Clone)]
-struct TextInfo {
-    block_id: BlockId,
-}
-
 #[derive(Debug)]
 struct Block {
     compressed_data: Vec<u8>,
@@ -81,7 +76,7 @@ pub struct TextUsageBuilder {
     current_block_buffer: Vec<u8>,
     current_block_texts: Vec<Range<usize>>,
     blocks: Vec<Block>,
-    text_infos: Vec<TextInfo>,
+    texts: Vec<BlockId>,
 }
 
 impl TextUsageBuilder {
@@ -90,7 +85,7 @@ impl TextUsageBuilder {
             block_size,
             cache_capacity,
             blocks: Vec::new(),
-            text_infos: Vec::new(),
+            texts: Vec::new(),
             current_block_buffer: Vec::new(),
             current_block_texts: Vec::new(),
         }
@@ -101,7 +96,7 @@ impl TextUsageBuilder {
         let text_bytes = text.as_bytes();
         // we use the length of the previously compressed texts plus the ones
         // we are currently building to determine a unique incremental text id
-        let text_id = TextId::new(self.text_infos.len() + self.current_block_texts.len());
+        let text_id = TextId::new(self.texts.len() + self.current_block_texts.len());
 
         // Check if adding this text would exceed block size
         if (self.current_block_buffer.len() + text_bytes.len()) > self.block_size
@@ -131,10 +126,9 @@ impl TextUsageBuilder {
         let block_id = BlockId::new(self.blocks.len());
 
         // Now we need to create a text info for each text in this block
-        let start_text_id = TextId::new(self.text_infos.len());
+        let start_text_id = TextId::new(self.texts.len());
         for _ in &self.current_block_texts {
-            let text_info = TextInfo { block_id };
-            self.text_infos.push(text_info);
+            self.texts.push(block_id);
         }
         // Create compressed block
         let block = Block::compress(
@@ -153,25 +147,25 @@ impl TextUsageBuilder {
     pub fn build(mut self) -> TextUsage {
         // if there is a half-finished block, finalize it
         self.finalize_current_block();
-        TextUsage::new(self.cache_capacity, self.blocks, self.text_infos)
+        TextUsage::new(self.cache_capacity, self.blocks, self.texts)
     }
 }
 
 /// Main compressed string storage structure
 pub struct TextUsage {
     blocks: Vec<Block>,
-    text_infos: Vec<TextInfo>,
+    texts: Vec<BlockId>,
     cache: RefCell<LruCache<BlockId, Arc<[Arc<str>]>>>,
     cache_capacity: usize,
 }
 
 impl TextUsage {
-    fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
+    fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<BlockId>) -> Self {
         // LruCache requires NonZeroUsize, so we use 1 as minimum capacity
         let capacity = NonZeroUsize::new(cache_capacity.max(1)).unwrap();
         Self {
             blocks,
-            text_infos,
+            texts: text_infos,
             cache: RefCell::new(LruCache::new(capacity)),
             cache_capacity,
         }
@@ -197,29 +191,29 @@ impl TextUsage {
 
     /// Retrieve a string by its TextId
     pub fn get_string(&self, text_id: TextId) -> Arc<str> {
-        let text_info = self.text_infos.get(text_id.0).expect("TextId should exist");
+        let block_id = self.texts.get(text_id.0).expect("TextId should exist");
 
         let block = self
             .blocks
-            .get(text_info.block_id.as_index())
+            .get(block_id.as_index())
             .expect("Block should exist");
 
         let block_slices = {
             if self.cache_capacity > 0 {
                 let mut cache = self.cache.borrow_mut();
-                if let Some(cached) = cache.get(&text_info.block_id) {
+                if let Some(cached) = cache.get(&block_id) {
                     cached.clone()
                 } else {
                     // Decompress and cache
                     let block_data = block.decompress();
                     let block_slices: Arc<[Arc<str>]> =
-                        Arc::from(self.block_slices(text_info.block_id, block_data));
-                    cache.put(text_info.block_id, block_slices.clone());
+                        Arc::from(self.block_slices(*block_id, block_data));
+                    cache.put(*block_id, block_slices.clone());
                     block_slices
                 }
             } else {
                 let block_data = block.decompress();
-                Arc::from(self.block_slices(text_info.block_id, block_data))
+                Arc::from(self.block_slices(*block_id, block_data))
             }
         };
 
@@ -242,7 +236,7 @@ impl TextUsage {
             .sum::<usize>();
 
         StorageStats {
-            total_texts: self.text_infos.len(),
+            total_texts: self.texts.len(),
             total_blocks: self.blocks.len(),
             compressed_size: total_compressed_size,
             original_size: total_original_size,
