@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
+use std::ops::Range;
 
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
@@ -34,8 +35,7 @@ impl BlockId {
 #[derive(Debug, Clone)]
 struct TextInfo {
     block_id: BlockId,
-    start: usize,
-    length: usize,
+    range: Range<usize>,
 }
 
 #[derive(Debug)]
@@ -127,8 +127,7 @@ impl TextUsageBuilder {
         for (start, length) in &self.current_block_texts {
             let text_info = TextInfo {
                 block_id,
-                start: *start,
-                length: *length,
+                range: *start..(*start + *length),
             };
             self.text_infos.push(text_info);
         }
@@ -170,7 +169,7 @@ impl TextUsage {
     }
 
     fn string_data(text_info: &TextInfo, block_data: &[u8]) -> String {
-        let text_bytes = &block_data[text_info.start..text_info.start + text_info.length];
+        let text_bytes = &block_data[text_info.range.clone()];
         // TODO: could do an unchecked conversion here as we should be sure
         // it's valid UTF-8
         String::from_utf8_lossy(text_bytes).into_owned()
