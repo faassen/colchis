@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::num::NonZeroUsize;
 use std::ops::Range;
 
+use ahash::{HashMap, HashMapExt};
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
@@ -152,17 +153,39 @@ impl TextUsageBuilder {
 pub struct TextUsage {
     blocks: Vec<Block>,
     text_infos: Vec<TextInfo>,
+    // a more convenient way to access text info information per-block
+    block_infos: HashMap<BlockId, BlockInfo>,
     cache: RefCell<LruCache<BlockId, Vec<u8>>>,
     cache_capacity: usize,
+}
+
+struct BlockInfo {
+    start_text_id: TextId,
+    ranges: Vec<Range<usize>>,
 }
 
 impl TextUsage {
     fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
         // LruCache requires NonZeroUsize, so we use 1 as minimum capacity
         let capacity = NonZeroUsize::new(cache_capacity.max(1)).unwrap();
+        // construct block infos as a more convenient way to access
+        // which text ranges belong to which block
+        let mut block_infos = HashMap::new();
+        for (i, text_info) in text_infos.iter().enumerate() {
+            let block_id = text_info.block_id;
+            // we create a new block info if we have a new block, marking
+            // the starting text id for this block
+            let entry = block_infos.entry(block_id).or_insert_with(|| BlockInfo {
+                start_text_id: TextId::new(i),
+                ranges: Vec::new(),
+            });
+            // we keep all ranges per block
+            entry.ranges.push(text_info.range.clone());
+        }
         Self {
             blocks,
             text_infos,
+            block_infos,
             cache: RefCell::new(LruCache::new(capacity)),
             cache_capacity,
         }
