@@ -1,10 +1,9 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
-use std::ops::{Range, RangeFull};
+use std::ops::Range;
 use std::sync::Arc;
 
-use ahash::{HashMap, HashMapExt};
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
