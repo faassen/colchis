@@ -68,6 +68,11 @@ impl Block {
         decompressed
     }
 
+    fn heap_size(&self) -> usize {
+        self.compressed_data.len() * std::mem::size_of::<u8>()
+            + self.ranges.len() * std::mem::size_of::<Range<usize>>()
+    }
+
     fn block_slices(&self) -> Arc<[Arc<str>]> {
         let block_data = self.decompress();
         self.ranges
@@ -138,7 +143,7 @@ impl TextUsageBuilder {
 
         let block_id = BlockId::new(self.blocks.len());
 
-        // Now we need to create a text info for each text in this block
+        // Now we want to keep a mapping of text id to block id
         let start_text_id = TextId::new(self.texts.len());
         for _ in &self.current_block_texts {
             self.texts.push(block_id);
@@ -182,6 +187,13 @@ impl TextUsage {
             cache: RefCell::new(LruCache::new(capacity)),
             cache_capacity,
         }
+    }
+
+    pub fn heap_size(&self) -> usize {
+        let blocks_size: usize = self.blocks.iter().map(|b| b.heap_size()).sum();
+        let texts_size = self.texts.len() * std::mem::size_of::<BlockId>();
+        // we ignore the cache, though it will impact the heap size, it's not part of the persistent storage
+        blocks_size + texts_size
     }
 
     /// Retrieve a string by its TextId
