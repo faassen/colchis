@@ -1,9 +1,7 @@
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
-use std::ops::{Deref, Range};
-use std::rc::Rc;
+use std::ops::Range;
 use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt};
