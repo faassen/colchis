@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -11,7 +11,6 @@ use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use lru::LruCache;
-use yoke::{Yoke, Yokeable};
 
 /// Unique identifier for stored text
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -159,7 +158,7 @@ pub struct TextUsage {
     text_infos: Vec<TextInfo>,
     // a more convenient way to access text info information per-block
     block_infos: HashMap<BlockId, BlockInfo>,
-    cache: RefCell<LruCache<BlockId, Vec<u8>>>,
+    cache: RefCell<LruCache<BlockId, Arc<[Arc<str>]>>>,
     cache_capacity: usize,
 }
 
@@ -167,13 +166,6 @@ struct BlockInfo {
     start_text_id: TextId,
     ranges: Vec<Range<usize>>,
 }
-
-#[derive(Yokeable, Clone)]
-struct BlockSlices<'a> {
-    slices: Vec<&'a str>,
-}
-
-type YokedBlockSlices = Yoke<BlockSlices<'static>, Arc<[u8]>>;
 
 impl TextUsage {
     fn new(cache_capacity: usize, blocks: Vec<Block>, text_infos: Vec<TextInfo>) -> Self {
@@ -209,62 +201,62 @@ impl TextUsage {
         String::from_utf8_lossy(text_bytes).into_owned()
     }
 
-    // a zero copy way to extract all strings from the block data
-    fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> YokedBlockSlices {
+    // extract all strings from the block data
+    fn block_slices(&self, block_id: BlockId, block_data: Vec<u8>) -> Vec<Arc<str>> {
         let block_info = self
             .block_infos
             .get(&block_id)
             .expect("BlockId should exist");
-        // turn block_data into an Arc; this ought to avoid copying as the vec is
-        // at capacity
-        let block_data: Arc<[u8]> = Arc::from(block_data);
-        Yoke::<BlockSlices<'static>, Arc<[u8]>>::attach_to_cart(
-            block_data,
-            |block_data: &[u8]| {
-                let mut slices = Vec::with_capacity(block_info.ranges.len());
-
-                for range in &block_info.ranges {
-                    // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8,
-                    // and because we yoke the slices to the block data, we ensure that the lifetime is valid.
-                    let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
-                    slices.push(s);
-                }
-                BlockSlices { slices }
-            },
-        )
+        block_info
+            .ranges
+            .iter()
+            .map(|range| {
+                // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8
+                let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
+                // this is not zero-copy but we'll accept that
+                Arc::from(s)
+            })
+            .collect()
     }
 
     /// Retrieve a string by its TextId
-    pub fn get_string(&self, text_id: TextId) -> String {
+    pub fn get_string(&self, text_id: TextId) -> Arc<str> {
         let text_info = self.text_infos.get(text_id.0).expect("TextId should exist");
 
-        // If cache capacity is 0, skip caching entirely
-        if self.cache_capacity == 0 {
-            let block = self
-                .blocks
-                .get(text_info.block_id.as_index())
-                .expect("Compressed block should exist");
-            let block_data = block.decompress();
-            return Self::string_data(text_info, &block_data);
-        }
+        let block_slices = {
+            if self.cache_capacity > 0 {
+                let mut cache = self.cache.borrow_mut();
+                if let Some(cached) = cache.get(&text_info.block_id) {
+                    cached.clone()
+                } else {
+                    // Decompress and cache
+                    let block = self
+                        .blocks
+                        .get(text_info.block_id.as_index())
+                        .expect("Block should exist");
+                    let block_data = block.decompress();
+                    let block_slices: Arc<[Arc<str>]> =
+                        Arc::from(self.block_slices(text_info.block_id, block_data));
+                    cache.put(text_info.block_id, block_slices.clone());
+                    block_slices
+                }
+            } else {
+                let block = self
+                    .blocks
+                    .get(text_info.block_id.as_index())
+                    .expect("Block should exist");
+                let block_data = block.decompress();
+                Arc::from(self.block_slices(text_info.block_id, block_data))
+            }
+        };
 
-        // first look for block in LRU cache
-        let mut cache = self.cache.borrow_mut();
-        let block_data = cache.get(&text_info.block_id);
-        if let Some(block_data) = block_data {
-            return Self::string_data(text_info, block_data);
-        }
-
-        // okay it was not in the cache, so we need to decompress the block
-        let block = self
-            .blocks
-            .get(text_info.block_id.as_index())
-            .expect("Compressed block should exist");
-        let block_data = block.decompress();
-        let s = Self::string_data(text_info, &block_data);
-        // now we can add the decompressed block to the cache
-        cache.put(text_info.block_id, block_data);
-        s
+        // TODO: get start from block itself
+        let block_info = self
+            .block_infos
+            .get(&text_info.block_id)
+            .expect("BlockId should exist");
+        let offset = text_id.0 - block_info.start_text_id.0;
+        block_slices[offset].clone()
     }
 
     /// Get storage statistics
@@ -325,7 +317,7 @@ mod tests {
         let usage = builder.build();
 
         let retrieved = usage.get_string(text_id);
-        assert_eq!(retrieved, text);
+        assert_eq!(retrieved, text.into());
     }
 
     #[test]
@@ -343,7 +335,7 @@ mod tests {
 
         for (i, text_id) in text_ids.iter().enumerate() {
             let retrieved = usage.get_string(*text_id);
-            assert_eq!(retrieved, texts[i]);
+            assert_eq!(retrieved, texts[i].into());
         }
         assert_eq!(usage.stats().total_blocks, 1);
     }
@@ -362,8 +354,8 @@ mod tests {
 
         let usage = builder.build();
 
-        assert_eq!(usage.get_string(id1), long_text);
-        assert_eq!(usage.get_string(id2), short_text);
+        assert_eq!(usage.get_string(id1), long_text.into());
+        assert_eq!(usage.get_string(id2), short_text.into());
         assert_eq!(usage.stats().total_blocks, 2);
     }
 
@@ -382,10 +374,10 @@ mod tests {
 
         let usage = builder.build();
 
-        assert_eq!(usage.get_string(id1), long_text);
+        assert_eq!(usage.get_string(id1), long_text.into());
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id2), short_text);
+        assert_eq!(usage.get_string(id2), short_text.into());
         assert_eq!(usage.stats().cache_size, 2);
     }
 
@@ -398,7 +390,7 @@ mod tests {
         let usage = builder.build();
         // Retrieve the empty string
         let retrieved = usage.get_string(text_id);
-        assert_eq!(retrieved, "");
+        assert_eq!(retrieved, "".into());
         assert_eq!(usage.stats().total_texts, 1);
     }
 
@@ -415,7 +407,7 @@ mod tests {
 
         let usage = builder.build();
         let retrieved = usage.get_string(text_id);
-        assert_eq!(retrieved, exact_size_text);
+        assert_eq!(retrieved, exact_size_text.into());
         assert_eq!(usage.stats().total_blocks, 1);
         assert_eq!(usage.stats().total_texts, 1);
     }
@@ -435,8 +427,8 @@ mod tests {
         let id2 = builder.add_string(second_text);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), first_text);
-        assert_eq!(usage.get_string(id2), second_text);
+        assert_eq!(usage.get_string(id1), first_text.into());
+        assert_eq!(usage.get_string(id2), second_text.into());
         assert_eq!(usage.stats().total_blocks, 1); // Should fit in one block
         assert_eq!(usage.stats().total_texts, 2);
     }
@@ -456,8 +448,8 @@ mod tests {
         let id2 = builder.add_string(second_text);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), first_text);
-        assert_eq!(usage.get_string(id2), second_text);
+        assert_eq!(usage.get_string(id1), first_text.into());
+        assert_eq!(usage.get_string(id2), second_text.into());
         assert_eq!(usage.stats().total_blocks, 2); // Should create two blocks
         assert_eq!(usage.stats().total_texts, 2);
     }
@@ -473,7 +465,7 @@ mod tests {
 
         let usage = builder.build();
         let retrieved = usage.get_string(text_id);
-        assert_eq!(retrieved, massive_text);
+        assert_eq!(retrieved, massive_text.into());
         assert_eq!(usage.stats().total_blocks, 1); // Still one block, just large
         assert_eq!(usage.stats().total_texts, 1);
     }
@@ -494,9 +486,9 @@ mod tests {
         let id3 = builder.add_string(text3);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), text1);
-        assert_eq!(usage.get_string(id2), text2);
-        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.get_string(id1), text1.into());
+        assert_eq!(usage.get_string(id2), text2.into());
+        assert_eq!(usage.get_string(id3), text3.into());
         assert_eq!(usage.stats().total_blocks, 1);
         assert_eq!(usage.stats().total_texts, 3);
     }
@@ -521,7 +513,7 @@ mod tests {
         let usage = builder.build();
 
         for (i, text_id) in text_ids.iter().enumerate() {
-            assert_eq!(usage.get_string(*text_id), texts[i]);
+            assert_eq!(usage.get_string(*text_id), texts[i].into());
         }
         assert_eq!(usage.stats().total_blocks, 3); // Each string in its own block
         assert_eq!(usage.stats().total_texts, 3);
@@ -544,9 +536,9 @@ mod tests {
         let id3 = builder.add_string(next_text);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), full_text);
-        assert_eq!(usage.get_string(id2), "");
-        assert_eq!(usage.get_string(id3), next_text);
+        assert_eq!(usage.get_string(id1), full_text.into());
+        assert_eq!(usage.get_string(id2), "".into());
+        assert_eq!(usage.get_string(id3), next_text.into());
         assert_eq!(usage.stats().total_blocks, 2);
         assert_eq!(usage.stats().total_texts, 3);
     }
@@ -563,8 +555,8 @@ mod tests {
         let id2 = builder.add_string(text2);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), text1);
-        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id1), text1.into());
+        assert_eq!(usage.get_string(id2), text2.into());
         assert_eq!(usage.stats().total_blocks, 2); // Each string in its own block
         assert_eq!(usage.stats().total_texts, 2);
     }
@@ -584,10 +576,10 @@ mod tests {
         let id4 = builder.add_string(overflow); // Block 4: overflows
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), exact_fit);
-        assert_eq!(usage.get_string(id2), overflow);
-        assert_eq!(usage.get_string(id3), exact_fit);
-        assert_eq!(usage.get_string(id4), overflow);
+        assert_eq!(usage.get_string(id1), exact_fit.into());
+        assert_eq!(usage.get_string(id2), overflow.into());
+        assert_eq!(usage.get_string(id3), exact_fit.into());
+        assert_eq!(usage.get_string(id4), overflow.into());
         assert_eq!(usage.stats().total_blocks, 4);
         assert_eq!(usage.stats().total_texts, 4);
     }
@@ -611,11 +603,11 @@ mod tests {
         let id5 = builder.add_string(text2);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), text1);
-        assert_eq!(usage.get_string(id2), "");
-        assert_eq!(usage.get_string(id3), "");
-        assert_eq!(usage.get_string(id4), "");
-        assert_eq!(usage.get_string(id5), text2);
+        assert_eq!(usage.get_string(id1), text1.into());
+        assert_eq!(usage.get_string(id2), "".into());
+        assert_eq!(usage.get_string(id3), "".into());
+        assert_eq!(usage.get_string(id4), "".into());
+        assert_eq!(usage.get_string(id5), text2.into());
         assert_eq!(usage.stats().total_blocks, 2);
         assert_eq!(usage.stats().total_texts, 5);
     }
@@ -636,12 +628,12 @@ mod tests {
         let id6 = builder.add_string("F");
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), "A");
-        assert_eq!(usage.get_string(id2), "B");
-        assert_eq!(usage.get_string(id3), "C");
-        assert_eq!(usage.get_string(id4), "D");
-        assert_eq!(usage.get_string(id5), "E");
-        assert_eq!(usage.get_string(id6), "F");
+        assert_eq!(usage.get_string(id1), "A".into());
+        assert_eq!(usage.get_string(id2), "B".into());
+        assert_eq!(usage.get_string(id3), "C".into());
+        assert_eq!(usage.get_string(id4), "D".into());
+        assert_eq!(usage.get_string(id5), "E".into());
+        assert_eq!(usage.get_string(id6), "F".into());
         assert_eq!(usage.stats().total_blocks, 2);
         assert_eq!(usage.stats().total_texts, 6);
     }
@@ -657,10 +649,10 @@ mod tests {
         let id4 = builder.add_string(""); // 0 bytes - new block
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), "A");
-        assert_eq!(usage.get_string(id2), "B");
-        assert_eq!(usage.get_string(id3), "AB");
-        assert_eq!(usage.get_string(id4), "");
+        assert_eq!(usage.get_string(id1), "A".into());
+        assert_eq!(usage.get_string(id2), "B".into());
+        assert_eq!(usage.get_string(id3), "AB".into());
+        assert_eq!(usage.get_string(id4), "".into());
         assert_eq!(usage.stats().total_blocks, 4);
         assert_eq!(usage.stats().total_texts, 4);
     }
@@ -677,9 +669,9 @@ mod tests {
         let id3 = builder.add_string(exact_text);
 
         let usage = builder.build();
-        assert_eq!(usage.get_string(id1), exact_text);
-        assert_eq!(usage.get_string(id2), exact_text);
-        assert_eq!(usage.get_string(id3), exact_text);
+        assert_eq!(usage.get_string(id1), exact_text.into());
+        assert_eq!(usage.get_string(id2), exact_text.into());
+        assert_eq!(usage.get_string(id3), exact_text.into());
         assert_eq!(usage.stats().total_blocks, 3); // Each in its own block
         assert_eq!(usage.stats().total_texts, 3);
     }
@@ -704,20 +696,20 @@ mod tests {
         let usage = builder.build();
 
         // Access all strings - should cause cache eviction
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block1]
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block2]
+        assert_eq!(usage.get_string(id2), text2.into()); // Cache: [Block1, Block2]
         assert_eq!(usage.stats().cache_size, 2);
 
-        assert_eq!(usage.get_string(id3), text3); // Cache: [Block2, Block3] (Block1 evicted)
+        assert_eq!(usage.get_string(id3), text3.into()); // Cache: [Block2, Block3] (Block1 evicted)
         assert_eq!(usage.stats().cache_size, 2);
 
-        assert_eq!(usage.get_string(id4), text4); // Cache: [Block3, Block4] (Block2 evicted)
+        assert_eq!(usage.get_string(id4), text4.into()); // Cache: [Block3, Block4] (Block2 evicted)
         assert_eq!(usage.stats().cache_size, 2);
 
         // Access Block1 again - should require decompression
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block4, Block1] (Block3 evicted)
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block4, Block1] (Block3 evicted)
         assert_eq!(usage.stats().cache_size, 2);
     }
 
@@ -735,14 +727,14 @@ mod tests {
         let usage = builder.build();
 
         // Every access should decompress fresh (no caching)
-        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id1), text1.into());
         assert_eq!(usage.stats().cache_size, 0);
 
-        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id2), text2.into());
         assert_eq!(usage.stats().cache_size, 0);
 
         // Access again - still no caching
-        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id1), text1.into());
         assert_eq!(usage.stats().cache_size, 0);
     }
 
@@ -762,19 +754,19 @@ mod tests {
         let usage = builder.build();
 
         // Alternating access pattern that causes constant eviction
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block1]
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id2), text2); // Cache: [Block2] (Block1 evicted)
+        assert_eq!(usage.get_string(id2), text2.into()); // Cache: [Block2] (Block1 evicted)
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1] (Block2 evicted)
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block1] (Block2 evicted)
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id3), text3); // Cache: [Block3] (Block1 evicted)
+        assert_eq!(usage.get_string(id3), text3.into()); // Cache: [Block3] (Block1 evicted)
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(id2), text2); // Cache: [Block2] (Block3 evicted)
+        assert_eq!(usage.get_string(id2), text2.into()); // Cache: [Block2] (Block3 evicted)
         assert_eq!(usage.stats().cache_size, 1);
     }
 
@@ -796,14 +788,14 @@ mod tests {
         assert_eq!(usage.stats().total_blocks, 1); // All in same block
 
         // First access loads block into cache
-        assert_eq!(usage.get_string(id1), text1);
+        assert_eq!(usage.get_string(id1), text1.into());
         assert_eq!(usage.stats().cache_size, 1);
 
         // Subsequent accesses to same block should be cache hits
-        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id2), text2.into());
         assert_eq!(usage.stats().cache_size, 1); // Still same block
 
-        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.get_string(id3), text3.into());
         assert_eq!(usage.stats().cache_size, 1); // Still same block
     }
 
@@ -822,17 +814,17 @@ mod tests {
 
         // Access same string multiple times
         for _ in 0..5 {
-            assert_eq!(usage.get_string(id1), text1);
+            assert_eq!(usage.get_string(id1), text1.into());
         }
         assert_eq!(usage.stats().cache_size, 1);
 
         // Access second string
-        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id2), text2.into());
         assert_eq!(usage.stats().cache_size, 2);
 
         // Access first string again - should be cache hit
         for _ in 0..3 {
-            assert_eq!(usage.get_string(id1), text1);
+            assert_eq!(usage.get_string(id1), text1.into());
         }
         assert_eq!(usage.stats().cache_size, 2);
     }
@@ -854,15 +846,15 @@ mod tests {
         assert_eq!(usage.stats().total_blocks, 3);
 
         // Access all blocks - should all fit in cache
-        assert_eq!(usage.get_string(id1), text1);
-        assert_eq!(usage.get_string(id2), text2);
-        assert_eq!(usage.get_string(id3), text3);
+        assert_eq!(usage.get_string(id1), text1.into());
+        assert_eq!(usage.get_string(id2), text2.into());
+        assert_eq!(usage.get_string(id3), text3.into());
         assert_eq!(usage.stats().cache_size, 3);
 
         // Access in any order - should all be cache hits
-        assert_eq!(usage.get_string(id3), text3);
-        assert_eq!(usage.get_string(id1), text1);
-        assert_eq!(usage.get_string(id2), text2);
+        assert_eq!(usage.get_string(id3), text3.into());
+        assert_eq!(usage.get_string(id1), text1.into());
+        assert_eq!(usage.get_string(id2), text2.into());
         assert_eq!(usage.stats().cache_size, 3); // No eviction
     }
 
@@ -882,16 +874,16 @@ mod tests {
         let usage = builder.build();
 
         // Access strings from different blocks
-        assert_eq!(usage.get_string(id1), text1); // Block 3
+        assert_eq!(usage.get_string(id1), text1.into()); // Block 3
         assert_eq!(usage.stats().cache_size, 1);
 
-        assert_eq!(usage.get_string(empty_id1), ""); // Block 2
+        assert_eq!(usage.get_string(empty_id1), "".into()); // Block 2
         assert_eq!(usage.stats().cache_size, 2);
 
-        assert_eq!(usage.get_string(empty_id2), ""); // Block 2 (cache hit)
+        assert_eq!(usage.get_string(empty_id2), "".into()); // Block 2 (cache hit)
         assert_eq!(usage.stats().cache_size, 2);
 
-        assert_eq!(usage.get_string(text2_id), text2); // Block 2 (cache hit)
+        assert_eq!(usage.get_string(text2_id), text2.into()); // Block 2 (cache hit)
         assert_eq!(usage.stats().cache_size, 2);
     }
 
@@ -914,21 +906,21 @@ mod tests {
         let usage = builder.build();
 
         // Load first 3 blocks into cache
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block1]
-        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block2]
-        assert_eq!(usage.get_string(id3), text3); // Cache: [Block1, Block2, Block3]
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block1]
+        assert_eq!(usage.get_string(id2), text2.into()); // Cache: [Block1, Block2]
+        assert_eq!(usage.get_string(id3), text3.into()); // Cache: [Block1, Block2, Block3]
         assert_eq!(usage.stats().cache_size, 3);
 
         // Access Block1 again to make it most recently used
-        assert_eq!(usage.get_string(id1), text1); // Cache: [Block2, Block3, Block1]
+        assert_eq!(usage.get_string(id1), text1.into()); // Cache: [Block2, Block3, Block1]
         assert_eq!(usage.stats().cache_size, 3);
 
         // Add Block4 - should evict Block2 (least recently used)
-        assert_eq!(usage.get_string(id4), text4); // Cache: [Block3, Block1, Block4]
+        assert_eq!(usage.get_string(id4), text4.into()); // Cache: [Block3, Block1, Block4]
         assert_eq!(usage.stats().cache_size, 3);
 
         // Access Block2 again - should require decompression
-        assert_eq!(usage.get_string(id2), text2); // Cache: [Block1, Block4, Block2]
+        assert_eq!(usage.get_string(id2), text2.into()); // Cache: [Block1, Block4, Block2]
         assert_eq!(usage.stats().cache_size, 3);
     }
 }
