@@ -125,6 +125,7 @@ impl NodeLookup {
         idx
     }
 
+    #[allow(dead_code)]
     pub(crate) fn by_node_info(&self, node_info: &NodeInfo) -> Option<NodeInfoId> {
         self.node_info_lookup.get(node_info).copied()
     }

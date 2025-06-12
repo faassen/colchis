@@ -86,6 +86,7 @@ impl TextId {
         Self(id)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn id(&self) -> usize {
         self.0
     }

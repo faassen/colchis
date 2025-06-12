@@ -19,9 +19,10 @@ impl<U: UsageIndex> Document<U> {
 
 #[cfg(test)]
 mod tests {
-    use crate::usage::{BitpackingUsageBuilder, RoaringUsageBuilder, UsageBuilder};
-
+    #[allow(unused_imports)]
     use super::*;
+
+    use crate::usage::{BitpackingUsageBuilder, UsageBuilder};
 
     fn assert_round_trip(input: &str) {
         // parse document from a string

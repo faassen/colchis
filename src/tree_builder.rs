@@ -22,6 +22,7 @@ impl<T: UsageBuilder> TreeBuilder<T> {
         self.usage_builder.heap_size() + self.parentheses.heap_size()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn display_heap_sizes(&self) {
         let usage_builder_heap_size = self.usage_builder.heap_size();
         let parentheses_heap_size = self.parentheses.heap_size();

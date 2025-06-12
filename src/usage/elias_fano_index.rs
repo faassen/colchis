@@ -1,6 +1,6 @@
 use vers_vecs::SparseRSVec;
 
-use super::{roaring_builder::RoaringUsageBuilder, traits::UsageIndex};
+use super::traits::UsageIndex;
 use crate::{
     info::{self, NodeInfoId},
     lookup::NodeLookup,

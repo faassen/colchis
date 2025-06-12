@@ -161,6 +161,7 @@ mod tests {
 
         let mut my_data = vec![0u32; BitPacker4x::BLOCK_LEN];
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..BitPacker4x::BLOCK_LEN {
             my_data[i] = initial_value + (i * 2) as u32;
         }

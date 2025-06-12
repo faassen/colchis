@@ -14,6 +14,7 @@ impl<U: UsageIndex> Document<U> {
         )
     }
 
+    #[allow(dead_code)]
     pub(crate) fn primitive_parent(&self, node: Node) -> Option<Node> {
         self.structure.tree().parent(node.get()).map(Node::new)
     }

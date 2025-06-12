@@ -8,12 +8,8 @@ use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ValueType};
 use vers_vecs::BitVec;
 
 use crate::{
-    document::Document,
-    info::NodeType,
-    structure::Structure,
-    text_usage::TextBuilder,
-    tree_builder::TreeBuilder,
-    usage::{EliasFanoUsageIndex, RoaringUsageBuilder, UsageBuilder, UsageIndex},
+    document::Document, info::NodeType, structure::Structure, text_usage::TextBuilder,
+    tree_builder::TreeBuilder, usage::UsageBuilder,
 };
 
 pub(crate) struct Parser<R: Read, B: UsageBuilder> {

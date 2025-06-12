@@ -1,13 +1,13 @@
 use std::io::Read;
 
-use vers_vecs::{BitVec, Tree};
+use vers_vecs::BitVec;
 
 use crate::{
     info::NodeType,
-    parser::{JsonParseError, Parser, parse},
+    parser::{JsonParseError, parse},
     structure::Structure,
     text_usage::TextUsage,
-    usage::{EliasFanoUsageIndex, RoaringUsageBuilder, UsageBuilder, UsageIndex},
+    usage::{UsageBuilder, UsageIndex},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
