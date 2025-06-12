@@ -208,7 +208,7 @@ impl TextUsage {
         let block_slices = {
             if self.cache_capacity > 0 {
                 let mut cache = self.cache.borrow_mut();
-                if let Some(cached) = cache.get(&block_id) {
+                if let Some(cached) = cache.get(block_id) {
                     cached.clone()
                 } else {
                     // Decompress and cache

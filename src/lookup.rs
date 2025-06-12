@@ -140,6 +140,12 @@ impl NodeLookup {
     }
 }
 
+impl Default for NodeLookup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

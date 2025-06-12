@@ -30,7 +30,7 @@ impl<U: UsageIndex> PartialEq for Value<'_, U> {
     }
 }
 
-impl<'a, U: UsageIndex> Value<'a, U> {
+impl<U: UsageIndex> Value<'_, U> {
     pub fn serialize<W: Write>(&self, writer: &mut JsonStreamWriter<W>) -> std::io::Result<()> {
         match self {
             Value::Object(object) => object.serialize(writer),

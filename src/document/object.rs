@@ -14,7 +14,10 @@ impl<U: UsageIndex> PartialEq for ObjectValue<'_, U> {
     fn eq(&self, other: &Self) -> bool {
         // document reference equality
         self.node == other.node
-            && self.document as *const Document<U> == other.document as *const Document<U>
+            && std::ptr::eq(
+                self.document as *const Document<U>,
+                other.document as *const Document<U>,
+            )
     }
 }
 
