@@ -135,7 +135,7 @@ impl TextUsageBuilder {
         text_id
     }
 
-    fn finalize_current_block(&mut self) -> () {
+    fn finalize_current_block(&mut self) {
         if self.current_block_texts.is_empty() {
             // nothing to finalize, just return
             return;
