@@ -14,7 +14,7 @@ use lru::LruCache;
 pub struct TextId(usize);
 
 impl TextId {
-    fn new(id: usize) -> Self {
+    pub fn new(id: usize) -> Self {
         Self(id)
     }
 }
@@ -109,6 +109,17 @@ impl TextUsageBuilder {
         }
     }
 
+    /// Get approximate heap size used by the builder
+    pub fn heap_size(&self) -> usize {
+        let blocks_size = self.blocks.iter().map(|b| b.heap_size()).sum::<usize>();
+        let texts_size = self.texts.len() * std::mem::size_of::<BlockId>();
+        let current_buffer_size = self.current_block_buffer.len();
+        let current_texts_size =
+            self.current_block_texts.len() * std::mem::size_of::<Range<usize>>();
+
+        blocks_size + texts_size + current_buffer_size + current_texts_size
+    }
+
     /// Add a string to the storage and return its TextId
     pub fn add_string(&mut self, text: &str) -> TextId {
         let text_bytes = text.as_bytes();
@@ -170,6 +181,7 @@ impl TextUsageBuilder {
 }
 
 /// Main compressed string storage structure
+#[derive(Debug)]
 pub struct TextUsage {
     blocks: Vec<Block>,
     texts: Vec<BlockId>,

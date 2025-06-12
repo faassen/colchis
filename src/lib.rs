@@ -9,5 +9,5 @@ mod text_usage;
 mod tree_builder;
 mod usage;
 
-pub use document::{Document, Node};
+pub use document::{Document, Node, Value};
 pub use usage::{BitpackingUsageBuilder, RoaringUsageBuilder};

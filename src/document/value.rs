@@ -1,8 +1,9 @@
 use std::io::Write;
+use std::sync::Arc;
 
 use struson::writer::{JsonStreamWriter, JsonWriter};
 
-use crate::{info::NodeType, text_usage::TextId, usage::UsageIndex};
+use crate::{info::NodeType, text::TextId, usage::UsageIndex};
 
 use super::{Document, Node, ObjectValue, array::ArrayValue};
 
@@ -10,7 +11,7 @@ use super::{Document, Node, ObjectValue, array::ArrayValue};
 pub enum Value<'a, U: UsageIndex> {
     Object(ObjectValue<'a, U>),
     Array(ArrayValue<'a, U>),
-    String(&'a str),
+    String(Arc<str>),
     Number(f64),
     Boolean(bool),
     Null,
@@ -35,7 +36,7 @@ impl<U: UsageIndex> Value<'_, U> {
         match self {
             Value::Object(object) => object.serialize(writer),
             Value::Array(array) => array.serialize(writer),
-            Value::String(s) => writer.string_value(s),
+            Value::String(s) => writer.string_value(&s),
             Value::Number(n) => match writer.fp_number_value(*n) {
                 Ok(_) => Ok(()),
                 Err(e) => match e {
@@ -79,10 +80,10 @@ impl<U: UsageIndex> Document<U> {
         self.value(root)
     }
 
-    fn string_value(&self, node: Node) -> &str {
+    fn string_value(&self, node: Node) -> Arc<str> {
         let text_id = self.structure.text_id(node.get()).unwrap();
         let text_id = TextId::new(text_id);
-        self.text_usage.text_value(text_id)
+        self.text_usage.get_string(text_id)
     }
 
     fn number_value(&self, node: Node) -> f64 {
@@ -142,7 +143,7 @@ mod tests {
     fn test_string_value() {
         let doc = BitpackingUsageBuilder::parse(r#""hello""#.as_bytes()).unwrap();
         let v = doc.root_value();
-        assert_eq!(v, Value::String("hello"));
+        assert_eq!(v, Value::String("hello".into()));
     }
 
     #[test]
@@ -152,9 +153,9 @@ mod tests {
 
         if let Value::Array(array_value) = v {
             let mut iter = array_value.into_iter();
-            assert_eq!(iter.next(), Some(Value::String("a")));
-            assert_eq!(iter.next(), Some(Value::String("b")));
-            assert_eq!(iter.next(), Some(Value::String("c")));
+            assert_eq!(iter.next(), Some(Value::String("a".into())));
+            assert_eq!(iter.next(), Some(Value::String("b".into())));
+            assert_eq!(iter.next(), Some(Value::String("c".into())));
             assert_eq!(iter.next(), None);
         } else {
             panic!("Expected an array value");
@@ -193,7 +194,10 @@ mod tests {
         let v = doc.root_value();
 
         if let Value::Object(object_value) = v {
-            assert_eq!(object_value.get("key1"), Some(Value::String("value1")));
+            assert_eq!(
+                object_value.get("key1"),
+                Some(Value::String("value1".into()))
+            );
             assert_eq!(object_value.get("key2"), Some(Value::Number(42.0)));
         } else {
             panic!("Expected an object value");
@@ -223,7 +227,10 @@ mod tests {
 
         if let Value::Object(object_value) = v {
             let values: Vec<_> = object_value.values().collect();
-            assert_eq!(values, vec![Value::String("value1"), Value::Number(42.0)]);
+            assert_eq!(
+                values,
+                vec![Value::String("value1".into()), Value::Number(42.0)]
+            );
         } else {
             panic!("Expected an object value");
         }
@@ -239,7 +246,7 @@ mod tests {
             let entries: Vec<_> = object_value.iter().collect();
             assert_eq!(entries.len(), 2);
             assert_eq!(entries[0].0, "key1");
-            assert_eq!(entries[0].1, Value::String("value1"));
+            assert_eq!(entries[0].1, Value::String("value1".into()));
             assert_eq!(entries[1].0, "key2");
             assert_eq!(entries[1].1, Value::Number(42.0));
         } else {

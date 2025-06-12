@@ -6,7 +6,7 @@ use crate::{
     info::NodeType,
     parser::{JsonParseError, parse},
     structure::Structure,
-    text_usage::TextUsage,
+    text::TextUsage,
     usage::{UsageBuilder, UsageIndex},
 };
 

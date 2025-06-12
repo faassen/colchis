@@ -8,9 +8,12 @@ use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ValueType};
 use vers_vecs::BitVec;
 
 use crate::{
-    document::Document, info::NodeType, structure::Structure, text_usage::TextBuilder,
+    document::Document, info::NodeType, structure::Structure, text::TextUsageBuilder,
     tree_builder::TreeBuilder, usage::UsageBuilder,
 };
+
+const TEXT_USAGE_BLOCK_SIZE: usize = 4096;
+const TEXT_USAGE_CACHE_BLOCKS: usize = 10;
 
 pub(crate) struct Parser<R: Read, B: UsageBuilder> {
     reader: JsonStreamReader<R>,
@@ -19,7 +22,7 @@ pub(crate) struct Parser<R: Read, B: UsageBuilder> {
 
 pub(crate) struct Builder<B: UsageBuilder> {
     pub(crate) tree_builder: TreeBuilder<B>,
-    pub(crate) text_builder: TextBuilder,
+    pub(crate) text_builder: TextUsageBuilder,
     pub(crate) numbers: Vec<f64>,
     pub(crate) booleans: BitVec,
 }
@@ -28,7 +31,7 @@ impl<B: UsageBuilder> Builder<B> {
     pub(crate) fn new() -> Self {
         Self {
             tree_builder: TreeBuilder::new(),
-            text_builder: TextBuilder::new(),
+            text_builder: TextUsageBuilder::new(TEXT_USAGE_BLOCK_SIZE, TEXT_USAGE_CACHE_BLOCKS),
             numbers: Vec::new(),
             booleans: BitVec::new(),
         }
@@ -138,7 +141,7 @@ impl<R: Read, B: UsageBuilder> Parser<R, B> {
             ValueType::String => {
                 let str = self.reader.next_str()?;
                 self.builder.tree_builder.open(NodeType::String);
-                self.builder.text_builder.string_node(str);
+                let _text_id = self.builder.text_builder.add_string(str);
                 self.builder.tree_builder.close(NodeType::String);
             }
             ValueType::Number => {
