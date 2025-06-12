@@ -36,7 +36,7 @@ impl<U: UsageIndex> Value<'_, U> {
         match self {
             Value::Object(object) => object.serialize(writer),
             Value::Array(array) => array.serialize(writer),
-            Value::String(s) => writer.string_value(&s),
+            Value::String(s) => writer.string_value(s),
             Value::Number(n) => match writer.fp_number_value(*n) {
                 Ok(_) => Ok(()),
                 Err(e) => match e {

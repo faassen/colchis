@@ -12,7 +12,7 @@ use crate::{
     tree_builder::TreeBuilder, usage::UsageBuilder,
 };
 
-const TEXT_USAGE_BLOCK_SIZE: usize = 4096;
+const TEXT_USAGE_BLOCK_SIZE: usize = 1024 * 1024; // 1 MiB
 const TEXT_USAGE_CACHE_BLOCKS: usize = 10;
 
 pub(crate) struct Parser<R: Read, B: UsageBuilder> {

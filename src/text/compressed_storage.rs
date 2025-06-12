@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::num::NonZeroUsize;
-use std::ops::Range;
 use std::sync::Arc;
 
 use flate2::Compression;
