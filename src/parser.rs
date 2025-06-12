@@ -40,14 +40,17 @@ impl<B: UsageBuilder> Builder<B> {
     pub(crate) fn display_heap_sizes(&self) {
         let tree_heap_size = self.tree_builder.heap_size();
         let text_heap_size = self.text_builder.heap_size();
+        let uncompressed_text_size = self.text_builder.uncompressed_size();
         let numbers_heap_size = self.numbers.len() * std::mem::size_of::<f64>();
         let booleans_heap_size = self.booleans.heap_size();
         println!(
-            "Tree: {:>15} ({:>6} Mb), Text: {:>15} ({:>6} Mb), Numbers: {:>15} ({:>6} Mb), Booleans: {:>15} ({:>6} Mb)",
+            "Tree: {:>15} ({:>6} Mb), Text: {:>15} ({:>6} Mb), Text orig: {:>15} ({:>6} Mb), Numbers: {:>15} ({:>6} Mb), Booleans: {:>15} ({:>6} Mb)",
             tree_heap_size,
             tree_heap_size / (1024 * 1024),
             text_heap_size,
             text_heap_size / (1024 * 1024),
+            uncompressed_text_size,
+            uncompressed_text_size / (1024 * 1024),
             numbers_heap_size,
             numbers_heap_size / (1024 * 1024),
             booleans_heap_size,
@@ -99,7 +102,7 @@ impl<R: Read, B: UsageBuilder> Parser<R, B> {
         // This will use some memory per node type, which is then compacted down
         // into a succinct structure
         let structure = Structure::<B::Index>::new(self.builder.tree_builder);
-        // finally uncompress the text
+        // finally complete the text usage
         let text_usage = self.builder.text_builder.build();
         Ok(Document::new(
             structure,

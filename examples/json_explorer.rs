@@ -51,29 +51,9 @@ fn main() -> io::Result<()> {
                 heap_size,
                 to_mb(heap_size)
             );
-            let more_than_file_size = resident - file_size;
-            let less_than_file_size = file_size - heap_size;
-            let percentage_over_file_size = if file_size > 0 {
-                (more_than_file_size as f64 / file_size as f64) * 100.0
-            } else {
-                0.0
-            };
-            let percentage_under_file_size = if file_size > 0 {
-                (less_than_file_size as f64 / file_size as f64) * 100.0
-            } else {
-                0.0
-            };
-            println!(
-                "Resident over file size: {} ({:.4} Mb), Final under file size: {} ({:.4} Mb)",
-                more_than_file_size,
-                to_mb(more_than_file_size),
-                less_than_file_size,
-                to_mb(less_than_file_size)
-            );
-            println!(
-                "Resident usage is {:.2}% more than file size, finally allocated is {:.2}% less than file size",
-                percentage_over_file_size, percentage_under_file_size
-            );
+            println!("\n===== Size comparisons =====");
+            compare_sizes("Resident memory", resident, "File size", file_size);
+            compare_sizes("Heap size", heap_size, "File size", file_size);
         }
         Err(err) => {
             println!("Error parsing JSON: {:?}", err);
@@ -85,4 +65,40 @@ fn main() -> io::Result<()> {
 
 fn to_mb(bytes: usize) -> f64 {
     bytes as f64 / (1024.0 * 1024.0)
+}
+
+fn compare_sizes(name1: &str, size1: usize, name2: &str, size2: usize) {
+    if size1 > size2 {
+        let difference = size1 - size2;
+        let percentage = if size2 > 0 {
+            (difference as f64 / size2 as f64) * 100.0
+        } else {
+            0.0
+        };
+        println!(
+            "{} is {} bytes ({:.4} Mb) larger than {} ({:.2}% increase)",
+            name1,
+            difference,
+            to_mb(difference),
+            name2,
+            percentage
+        );
+    } else if size1 < size2 {
+        let difference = size2 - size1;
+        let percentage = if size2 > 0 {
+            (difference as f64 / size2 as f64) * 100.0
+        } else {
+            0.0
+        };
+        println!(
+            "{} is {} bytes ({:.4} Mb) smaller than {} ({:.2}% decrease)",
+            name1,
+            difference,
+            to_mb(difference),
+            name2,
+            percentage
+        );
+    } else {
+        println!("{} and {} are equal in size", name1, name2);
+    }
 }

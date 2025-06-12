@@ -8,6 +8,7 @@ use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use lru::LruCache;
+use vers_vecs::SparseRSVec;
 
 /// Unique identifier for stored text
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,12 +40,12 @@ struct Block {
     original_size: usize,
     // the start text id for this block
     start_text_id: TextId,
-    // the ranges of text ids in this block
-    ranges: Vec<Range<usize>>,
+    // the start points of text ids in this block
+    starts: SparseRSVec,
 }
 
 impl Block {
-    fn compress(start_text_id: TextId, ranges: Vec<Range<usize>>, data: &[u8]) -> Self {
+    fn compress(start_text_id: TextId, starts: &[u64], data: &[u8]) -> Self {
         let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
         encoder
             .write_all(data)
@@ -53,11 +54,12 @@ impl Block {
             .finish()
             .expect("Memory write should not result in IO error");
 
+        let starts = SparseRSVec::new(starts, data.len() as u64);
         Block {
             compressed_data,
             original_size: data.len(),
             start_text_id,
-            ranges,
+            starts,
         }
     }
 
@@ -69,21 +71,36 @@ impl Block {
     }
 
     fn heap_size(&self) -> usize {
-        self.compressed_data.len() * std::mem::size_of::<u8>()
-            + self.ranges.len() * std::mem::size_of::<Range<usize>>()
+        self.compressed_data.len() * std::mem::size_of::<u8>() + self.starts.heap_size()
+    }
+
+    fn uncompressed_size(&self) -> usize {
+        self.original_size + self.starts.heap_size()
     }
 
     fn block_slices(&self) -> Arc<[Arc<str>]> {
         let block_data = self.decompress();
-        self.ranges
-            .iter()
-            .map(|range| {
-                // SAFETY: we can do an unchecked conversion here as we know the data is valid UTF-8
-                let s = unsafe { std::str::from_utf8_unchecked(&block_data[range.clone()]) };
-                // this is not zero-copy but we'll accept that
-                Arc::from(s)
-            })
-            .collect()
+        let starts: Vec<u64> = self.starts.iter1().collect();
+        // get the ranges using the starts (and the original size for the last range)
+        let mut r = Vec::with_capacity(starts.len());
+        // TODO: if we kept starts.len on the block, we could use a peeking
+        // iterator here meaning we don't need to materialize the starts
+        for (i, start) in starts.iter().enumerate() {
+            let start = *start as usize;
+            let next_start = if i < starts.len() - 1 {
+                starts[i + 1] as usize
+            } else {
+                self.original_size
+            };
+            // we subtract 1 here because the last byte of each string is
+            // a \0 terminator
+            let next_start = next_start - 1;
+            let s = unsafe { std::str::from_utf8_unchecked(&block_data[start..next_start]) };
+            // this is not zero-copy but we'll accept that
+            r.push(Arc::from(s))
+        }
+        let slices: Arc<[Arc<str>]> = r.into();
+        slices
     }
 }
 
@@ -92,7 +109,7 @@ pub struct TextUsageBuilder {
     block_size: usize,
     cache_capacity: usize,
     current_block_buffer: Vec<u8>,
-    current_block_texts: Vec<Range<usize>>,
+    current_block_starts: Vec<u64>,
     blocks: Vec<Block>,
     texts: Vec<BlockId>,
 }
@@ -105,7 +122,7 @@ impl TextUsageBuilder {
             blocks: Vec::new(),
             texts: Vec::new(),
             current_block_buffer: Vec::new(),
-            current_block_texts: Vec::new(),
+            current_block_starts: Vec::new(),
         }
     }
 
@@ -114,10 +131,19 @@ impl TextUsageBuilder {
         let blocks_size = self.blocks.iter().map(|b| b.heap_size()).sum::<usize>();
         let texts_size = self.texts.len() * std::mem::size_of::<BlockId>();
         let current_buffer_size = self.current_block_buffer.len();
-        let current_texts_size =
-            self.current_block_texts.len() * std::mem::size_of::<Range<usize>>();
+        let current_starts_size = self.current_block_starts.len() * std::mem::size_of::<u64>();
 
-        blocks_size + texts_size + current_buffer_size + current_texts_size
+        blocks_size + texts_size + current_buffer_size + current_starts_size
+    }
+
+    pub fn uncompressed_size(&self) -> usize {
+        let uncompressed_blocks_size = self
+            .blocks
+            .iter()
+            .map(|b| b.uncompressed_size())
+            .sum::<usize>();
+        let texts_size = self.texts.len() * std::mem::size_of::<BlockId>();
+        uncompressed_blocks_size + texts_size
     }
 
     /// Add a string to the storage and return its TextId
@@ -125,7 +151,7 @@ impl TextUsageBuilder {
         let text_bytes = text.as_bytes();
         // we use the length of the previously compressed texts plus the ones
         // we are currently building to determine a unique incremental text id
-        let text_id = TextId::new(self.texts.len() + self.current_block_texts.len());
+        let text_id = TextId::new(self.texts.len() + self.current_block_starts.len());
 
         // Check if adding this text would exceed block size
         if (self.current_block_buffer.len() + text_bytes.len()) > self.block_size
@@ -138,16 +164,17 @@ impl TextUsageBuilder {
 
         let start = self.current_block_buffer.len();
         self.current_block_buffer.extend_from_slice(text_bytes);
+        // add a \0 character, otherwise we cannot store empty strings
+        self.current_block_buffer.push(0);
 
         // track that we've added this text to the current block
-        self.current_block_texts
-            .push(start..start + text_bytes.len());
+        self.current_block_starts.push(start as u64);
 
         text_id
     }
 
     fn finalize_current_block(&mut self) {
-        if self.current_block_texts.is_empty() {
+        if self.current_block_starts.is_empty() {
             // nothing to finalize, just return
             return;
         }
@@ -156,13 +183,13 @@ impl TextUsageBuilder {
 
         // Now we want to keep a mapping of text id to block id
         let start_text_id = TextId::new(self.texts.len());
-        for _ in &self.current_block_texts {
+        for _ in &self.current_block_starts {
             self.texts.push(block_id);
         }
         // Create compressed block
         let block = Block::compress(
             start_text_id,
-            self.current_block_texts.clone(),
+            &self.current_block_starts,
             &self.current_block_buffer,
         );
 
@@ -170,7 +197,7 @@ impl TextUsageBuilder {
 
         // Clear current block
         self.current_block_buffer.clear();
-        self.current_block_texts.clear();
+        self.current_block_starts.clear();
     }
 
     pub fn build(mut self) -> TextUsage {
@@ -392,15 +419,15 @@ mod tests {
 
     #[test]
     fn test_string_exactly_fills_remaining_space() {
-        let block_size = 20;
+        let block_size = 22;
         let mut builder = TextUsageBuilder::new(block_size, 5);
 
         // Add a string that partially fills the block
-        let first_text = "Hello"; // 5 bytes
+        let first_text = "Hello"; // 5 bytes plus 1 for terminator
         let id1 = builder.add_string(first_text);
 
         // Add a string that exactly fills the remaining 15 bytes
-        let second_text = "123456789012345"; // exactly 15 bytes
+        let second_text = "123456789012345"; // exactly 15 bytes plus 1 for terminator
         assert_eq!(second_text.len(), 15);
         let id2 = builder.add_string(second_text);
 
@@ -450,14 +477,14 @@ mod tests {
 
     #[test]
     fn test_multiple_strings_cumulative_exact_block_size() {
-        let block_size = 20;
+        let block_size = 23;
         let mut builder = TextUsageBuilder::new(block_size, 5);
 
         // Add strings that together sum to exactly block_size
         let text1 = "12345"; // 5 bytes
         let text2 = "67890"; // 5 bytes
         let text3 = "ABCDEFGHIJ"; // 10 bytes
-        // Total: 20 bytes exactly
+        // Total: 20 bytes exactly, but we need 3 for 0 terminators
 
         let id1 = builder.add_string(text1);
         let id2 = builder.add_string(text2);
@@ -564,11 +591,11 @@ mod tests {
 
     #[test]
     fn test_multiple_empty_strings_at_boundaries() {
-        let block_size = 5;
+        let block_size = 6;
         let mut builder = TextUsageBuilder::new(block_size, 5);
 
         // Fill first block exactly
-        let text1 = "12345"; // exactly 5 bytes
+        let text1 = "12345"; // exactly 5 bytes plus 1 for null terminator
         let id1 = builder.add_string(text1);
 
         // Add multiple empty strings - should all go to next block
