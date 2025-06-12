@@ -313,7 +313,7 @@ mod tests {
 
         // add a text beyond 10 bytes; this will fit in one block and force a new block
         let long_text = "This is a long text that should exceed the block size.";
-        let id1 = builder.add_string(&long_text);
+        let id1 = builder.add_string(long_text);
         // this should be in a new block
         let short_text = "Short";
         let id2 = builder.add_string(short_text);
@@ -333,7 +333,7 @@ mod tests {
 
         // add a text beyond 10 bytes; this will fit in one block and force a new block
         let long_text = "This is a long text that should exceed the block size.";
-        let id1 = builder.add_string(&long_text);
+        let id1 = builder.add_string(long_text);
         // this should be in a new block
         let short_text = "Short";
         let id2 = builder.add_string(short_text);
